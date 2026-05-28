@@ -201,6 +201,31 @@ table.t tbody tr:hover{background:#f7f9fc}
 .acct hr{border:none;border-top:1px solid var(--bd);margin:10px 0}
 .acct button{width:100%;justify-content:center}
 
+/* ── COMPLIANCE ── */
+.cmp-form{display:flex;flex-direction:column;gap:10px}
+.cmp-form .fld{margin-bottom:0}
+.cmp-readonly{font-size:12px;color:#1a1a1a;padding:7px 10px;background:#f7f9fc;border-radius:7px;border:1px solid #e7eaf0;min-height:32px;display:flex;align-items:center}
+.cmp-mini{margin-top:14px;padding-top:12px;border-top:1px dashed #e3e6ec}
+.cmp-mini-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cmp-mini-h .lbl{font-size:10px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:5px}
+.cmp-row{background:#fafbfc;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:11px}
+.cmp-row-top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.cmp-row-desc{color:#1a1a1a;font-weight:500;font-size:12px;margin-bottom:3px;line-height:1.35}
+.cmp-row-meta{color:var(--mt);font-size:10px;margin-top:4px}
+.iso-clause{display:inline-block;background:#eef0f3;color:#555;font-family:ui-monospace,Menlo,monospace;font-size:10px;padding:1px 6px;border-radius:4px}
+.pill.yellow{background:#fef3c7;color:#854F0B}
+.pill.minor{background:#fef3c7;color:#854F0B}
+.pill.major{background:#fbe1e0;color:#7d2424}
+.pill.observation{background:#f0f0f0;color:#555}
+.pill.compliant{background:#dff7ec;color:#155724}
+.pill.inprogress{background:#e6f0fb;color:#0c447c}
+.find-row{background:#fafbfc;border:1px solid var(--bd);border-radius:7px;padding:9px;margin-bottom:7px;display:flex;flex-direction:column;gap:6px}
+.find-row .fld{margin-bottom:0}
+.find-row .fr-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.find-row .fr-rm{background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px;padding:2px 5px;font-family:inherit}
+.find-row .fr-rm:hover{background:#fbe1e0;border-radius:5px}
+.cmp-empty{padding:14px;text-align:center;color:var(--mt);font-size:11px;font-style:italic}
+
 /* small screens */
 @media(max-width:900px){
   .sb{width:60px}
@@ -235,6 +260,10 @@ table.t tbody tr:hover{background:#f7f9fc}
       <div class="sb-item active" id="nav-dockets" onclick="showScreen('dockets')"><i class="ti ti-clipboard-list"></i><span>Dockets</span><span class="sb-badge" id="bdg-dockets">0</span></div>
       <div class="sb-item" id="nav-clients" onclick="showScreen('clients')"><i class="ti ti-building"></i><span>Clients</span></div>
       <div class="sb-item" id="nav-drivers" onclick="showScreen('drivers')"><i class="ti ti-users"></i><span>Drivers</span></div>
+      <div class="sb-sec">Compliance</div>
+      <div class="sb-item" id="nav-ncrs" onclick="showScreen('ncrs')"><i class="ti ti-alert-triangle"></i><span>Nonconformances</span><span class="sb-badge" id="bdg-ncrs">0</span></div>
+      <div class="sb-item" id="nav-venm" onclick="showScreen('venm')"><i class="ti ti-certificate"></i><span>VENM certificates</span></div>
+      <div class="sb-item" id="nav-iso" onclick="showScreen('iso')"><i class="ti ti-clipboard-check"></i><span>ISO audits</span></div>
       <div class="sb-sec">Reports</div>
       <div class="sb-item" id="nav-audit" onclick="showScreen('audit')"><i class="ti ti-history"></i><span>Audit log</span></div>
       <div class="sb-item" id="nav-settings" onclick="showScreen('settings')"><i class="ti ti-settings"></i><span>Settings</span></div>
@@ -328,6 +357,60 @@ table.t tbody tr:hover{background:#f7f9fc}
       </div>
     </section>
 
+    <!-- NCRS SCREEN -->
+    <section class="scr" id="scr-ncrs">
+      <div class="kb-toolbar">
+        <label>Status</label>
+        <select id="nc-status">
+          <option value="">All</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+        <input type="text" id="nc-search" placeholder="Search docket ID, description…" style="flex:1;min-width:160px;max-width:300px">
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="loadNCRs()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p" onclick="openNCRPanel()"><i class="ti ti-plus"></i> Raise NC</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="nc-tbl">
+          <thead><tr><th style="width:72px">NC #</th><th style="width:74px">Status</th><th>Docket</th><th>Stage</th><th>Description</th><th>Corrective action</th><th>Responsible</th><th style="width:120px">Created</th></tr></thead>
+          <tbody id="nc-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VENM SCREEN -->
+    <section class="scr" id="scr-venm">
+      <div class="kb-toolbar">
+        <input type="text" id="vn-search" placeholder="Search cert#, docket, lab…" style="flex:1;min-width:160px;max-width:300px">
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="loadVENM()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p" onclick="openVENMPanel()"><i class="ti ti-plus"></i> Add VENM cert</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="vn-tbl">
+          <thead><tr><th style="width:72px">Cert #</th><th>Docket</th><th>Cert number</th><th>NATA lab</th><th>Lab ref</th><th>Test date</th><th style="width:80px">Image</th></tr></thead>
+          <tbody id="vn-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ISO SCREEN -->
+    <section class="scr" id="scr-iso">
+      <div class="kb-toolbar">
+        <input type="text" id="is-search" placeholder="Search title, auditor…" style="flex:1;min-width:160px;max-width:300px">
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="loadISO()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p" onclick="openISOPanel()"><i class="ti ti-plus"></i> New audit</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="is-tbl">
+          <thead><tr><th style="width:80px">Audit #</th><th style="width:110px">Date</th><th>Title</th><th>Auditor</th><th>Scope</th><th style="width:110px">Status</th><th style="width:80px">Findings</th></tr></thead>
+          <tbody id="is-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- SETTINGS SCREEN -->
     <section class="scr" id="scr-settings">
       <div class="tbl-wrap">
@@ -379,12 +462,14 @@ table.t tbody tr:hover{background:#f7f9fc}
     <button class="dr-tab active" data-tab="details" onclick="drTab('details')">Details</button>
     <button class="dr-tab" data-tab="sigs" onclick="drTab('sigs')">Signatures</button>
     <button class="dr-tab" data-tab="photos" onclick="drTab('photos')">Photos</button>
+    <button class="dr-tab" data-tab="compliance" onclick="drTab('compliance')">Compliance</button>
     <button class="dr-tab" data-tab="audit" onclick="drTab('audit')">Audit</button>
   </div>
   <div class="dr-body">
     <div class="dr-pane active" id="dp-details"></div>
     <div class="dr-pane" id="dp-sigs"></div>
     <div class="dr-pane" id="dp-photos"></div>
+    <div class="dr-pane" id="dp-compliance"></div>
     <div class="dr-pane" id="dp-audit"></div>
   </div>
   <div class="dr-actions" id="dr-actions"></div>
@@ -454,6 +539,170 @@ table.t tbody tr:hover{background:#f7f9fc}
     <div class="row">
       <button class="btn-s" onclick="closeNewDocket()">Cancel</button>
       <button class="btn-p teal" id="nd-save" onclick="saveNewDocket()"><i class="ti ti-device-floppy"></i> <span id="nd-save-lbl">Save order</span></button>
+    </div>
+  </div>
+</aside>
+
+<!-- NCR PANEL (raise/edit nonconformance) -->
+<div class="drawer-bk" id="nc-bk" onclick="closeNCRPanel()"></div>
+<aside class="drawer" id="nc-drawer">
+  <div class="dr-head">
+    <div>
+      <h3 id="nc-title"><i class="ti ti-alert-triangle"></i> Raise nonconformance</h3>
+      <div class="sub" id="nc-sub">ISO 14001:2026 clause 10.2 — corrective action</div>
+    </div>
+    <button class="btn-x" onclick="closeNCRPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="nc-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Docket *</label>
+      <select id="nc-docket"><option value="">— Select docket —</option></select>
+    </div>
+    <div class="fld">
+      <label>Stage *</label>
+      <select id="nc-stage">
+        <option value="order">Order</option>
+        <option value="delivery">Delivery</option>
+        <option value="pickup">Pickup</option>
+        <option value="disposal">Disposal</option>
+      </select>
+    </div>
+    <div class="fld">
+      <label>Description *</label>
+      <textarea id="nc-desc" placeholder="What happened? What didn't conform?"></textarea>
+    </div>
+    <div class="fld">
+      <label>Corrective action</label>
+      <textarea id="nc-correct" placeholder="What corrective action will be taken?"></textarea>
+    </div>
+    <div class="fld">
+      <label>Responsible person</label>
+      <input type="text" id="nc-resp" placeholder="e.g. Sarah Jones">
+    </div>
+    <div class="fld" id="nc-status-fld" style="display:none">
+      <label>Status</label>
+      <select id="nc-stat">
+        <option value="open">Open</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeNCRPanel()">Cancel</button>
+      <button class="btn-p teal" id="nc-save" onclick="saveNCR()"><i class="ti ti-device-floppy"></i> <span id="nc-save-lbl">Save NC</span></button>
+    </div>
+    <div class="row" id="nc-close-row" style="display:none">
+      <button class="btn-p red" onclick="closeNCRRecord()"><i class="ti ti-check"></i> Close this NC</button>
+    </div>
+  </div>
+</aside>
+
+<!-- VENM PANEL -->
+<div class="drawer-bk" id="vn-bk" onclick="closeVENMPanel()"></div>
+<aside class="drawer" id="vn-drawer">
+  <div class="dr-head">
+    <div>
+      <h3><i class="ti ti-certificate"></i> <span id="vn-title">Add VENM certificate</span></h3>
+      <div class="sub">NATA-accredited test record — Virgin Excavated Natural Material</div>
+    </div>
+    <button class="btn-x" onclick="closeVENMPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="vn-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Docket *</label>
+      <select id="vn-docket"><option value="">— Select docket —</option></select>
+    </div>
+    <div class="fld">
+      <label>Certificate number *</label>
+      <input type="text" id="vn-cert" placeholder="e.g. NATA-2026-00123">
+    </div>
+    <div class="fld">
+      <label>NATA accredited lab *</label>
+      <input type="text" id="vn-lab" placeholder="e.g. Eurofins Environment Testing">
+    </div>
+    <div class="fld">
+      <label>Lab reference</label>
+      <input type="text" id="vn-ref" placeholder="e.g. EU-25-09876">
+    </div>
+    <div class="fld">
+      <label>Test date *</label>
+      <input type="date" id="vn-date">
+    </div>
+    <div class="fld">
+      <label>Certificate image (optional)</label>
+      <input type="file" id="vn-img" accept="image/*">
+      <div id="vn-img-existing" style="font-size:11px;color:var(--mt);margin-top:5px"></div>
+    </div>
+    <div class="fld">
+      <label>Notes</label>
+      <textarea id="vn-notes" placeholder="Any extra notes…"></textarea>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeVENMPanel()">Cancel</button>
+      <button class="btn-p teal" id="vn-save" onclick="saveVENM()"><i class="ti ti-device-floppy"></i> <span id="vn-save-lbl">Save cert</span></button>
+    </div>
+  </div>
+</aside>
+
+<!-- ISO AUDIT PANEL -->
+<div class="drawer-bk" id="is-bk" onclick="closeISOPanel()"></div>
+<aside class="drawer" id="is-drawer" style="width:640px">
+  <div class="dr-head">
+    <div>
+      <h3><i class="ti ti-clipboard-check"></i> <span id="is-title">New ISO 14001 audit</span></h3>
+      <div class="sub">Internal audit — ISO 14001:2026 clause 9.2</div>
+    </div>
+    <button class="btn-x" onclick="closeISOPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="is-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Title *</label>
+      <input type="text" id="is-title-in" placeholder="e.g. Q3 2026 Internal Audit">
+    </div>
+    <div class="fld-row">
+      <div class="fld">
+        <label>Audit date *</label>
+        <input type="date" id="is-date">
+      </div>
+      <div class="fld">
+        <label>Auditor name *</label>
+        <input type="text" id="is-auditor" placeholder="e.g. Alistair McKimm">
+      </div>
+    </div>
+    <div class="fld">
+      <label>Scope</label>
+      <textarea id="is-scope" placeholder="What was audited? Which processes / clauses?"></textarea>
+    </div>
+    <div class="fld">
+      <label>Overall status</label>
+      <select id="is-status">
+        <option value="in_progress">In progress</option>
+        <option value="compliant">Compliant</option>
+        <option value="minor_nc">Minor NC</option>
+        <option value="major_nc">Major NC</option>
+      </select>
+    </div>
+    <div class="cmp-mini" style="border-top:none;margin-top:6px;padding-top:0">
+      <div class="cmp-mini-h">
+        <span class="lbl"><i class="ti ti-list-check"></i> Findings</span>
+        <button class="btn-s" onclick="addFinding()"><i class="ti ti-plus"></i> Add finding</button>
+      </div>
+      <div id="is-findings"></div>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeISOPanel()">Cancel</button>
+      <button class="btn-p teal" id="is-save" onclick="saveISO()"><i class="ti ti-device-floppy"></i> <span id="is-save-lbl">Save audit</span></button>
+    </div>
+    <div class="row" id="is-close-row" style="display:none">
+      <button class="btn-p" onclick="markISOClosed()"><i class="ti ti-check"></i> Mark audit closed</button>
     </div>
   </div>
 </aside>
@@ -568,12 +817,19 @@ let DOCKETS = [];       // raw dockets rows
 let DRIVERS = [];       // raw drivers rows
 let PHOTOS_CACHE = {};  // docket_id → [{zone, storage_path, publicUrl}]
 let AUDIT_CACHE = {};   // docket_id → [{...}]
+let NCRS = [];          // all nonconformances
+let VENMS = [];         // all venm_certificates
+let ISOS = [];          // all iso_audits
 let currentUser = null; // {id, auth_user_id, name, role, email}
 let activeScreen = 'dockets';
 let activeDocket = null;
 let _reasonResolve = null;
 let _rtChannel = null;
 let _filters = { client:'', from:'', to:'', search:'' };
+let _editingNcId = null;
+let _editingVnId = null;
+let _editingIsoId = null;
+let _isoFindings = []; // working copy while editing audit
 
 const STAGE_COLS = [
   { n:1, label:'Order received',    icon:'ti-clipboard',         pill:'pill grey' },
@@ -600,12 +856,15 @@ function showScreen(s){
   $('scr-'+s).classList.add('active');
   document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
   const navEl = $('nav-'+s); if(navEl) navEl.classList.add('active');
-  const titles = { dockets:'Dockets', clients:'Clients', drivers:'Drivers', audit:'Audit log', settings:'Settings' };
+  const titles = { dockets:'Dockets', clients:'Clients', drivers:'Drivers', audit:'Audit log', settings:'Settings', ncrs:'Nonconformances', venm:'VENM certificates', iso:'ISO 14001 audits' };
   $('tb-title').textContent = titles[s] || s;
   if(s==='dockets') renderBoard();
   if(s==='clients') renderClients();
   if(s==='drivers') renderDrivers();
   if(s==='audit') loadAuditLog();
+  if(s==='ncrs') loadNCRs();
+  if(s==='venm') loadVENM();
+  if(s==='iso') loadISO();
 }
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
@@ -827,6 +1086,7 @@ function openDrawer(docketId){
   renderDrawerDetails(d);
   renderDrawerSigs(d);
   renderDrawerActions(d);
+  renderDrawerCompliance(d);
   loadPhotosForDocket(d.id);
   loadAuditForDocket(d.id);
   $('dr-bk').classList.add('on');
@@ -853,6 +1113,7 @@ function refreshDrawer(){
   renderDrawerDetails(fresh);
   renderDrawerSigs(fresh);
   renderDrawerActions(fresh);
+  renderDrawerCompliance(fresh);
   $('dr-title').textContent = fresh.id + ' — ' + clientNameOf(fresh);
   $('dr-sub').textContent = (STAGE_COLS.find(c=>c.n===(fresh.stage||1))||{}).label + ' · ' + (fresh.site||'No site');
 }
@@ -963,6 +1224,651 @@ function renderDrawerActions(d){
       <button class="btn-p red" onclick="resetAllSigs('${esc(d.id)}')"><i class="ti ti-refresh"></i> Reset all signatures</button>
     </div>
   `;
+}
+
+// ── COMPLIANCE — drawer tab ────────────────────────────────────────────────
+const EPA_CLASSES = [
+  'General Solid Waste (putrescible)',
+  'General Solid Waste (non-putrescible)',
+  'Restricted Solid Waste',
+  'Hazardous Waste',
+  'VENM (Virgin Excavated Natural Material)',
+  'Asbestos',
+  'Special Waste',
+  'Liquid Waste'
+];
+const DISPOSAL_OUTCOMES = ['Landfill','Recycled','Recovered','Reused'];
+
+function retentionDate(d){
+  const base = d.submitted_at || d.created_at;
+  if(!base) return '—';
+  const dt = new Date(base);
+  if(isNaN(dt)) return '—';
+  dt.setFullYear(dt.getFullYear() + 7);
+  return fmtDate(dt);
+}
+
+function ncPill(status){
+  return status === 'closed' ? '<span class="pill green">Closed</span>' : '<span class="pill orange">Open</span>';
+}
+
+function isoStatusPill(s){
+  const m = { compliant:'compliant', minor_nc:'minor', major_nc:'major', observation:'observation', in_progress:'inprogress' };
+  const labels = { compliant:'Compliant', minor_nc:'Minor NC', major_nc:'Major NC', observation:'Observation', in_progress:'In progress', closed:'Closed' };
+  const cls = m[s] || 'grey';
+  return '<span class="pill '+cls+'">'+esc(labels[s]||s||'—')+'</span>';
+}
+
+async function renderDrawerCompliance(d){
+  const pane = $('dp-compliance');
+  if(!pane) return;
+  const isVENM = (d.waste_type === 'VENM') || (d.epa_classification && /VENM/i.test(d.epa_classification));
+  const cls = d.epa_classification || (isVENM ? 'VENM (Virgin Excavated Natural Material)' : '');
+  const out = d.disposal_outcome || '';
+  const dv  = (d.diversion_pct != null) ? d.diversion_pct : (out === 'Landfill' ? 0 : (out ? 100 : ''));
+
+  pane.innerHTML = `
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-shield-check"></i>ISO 14001:2026 / NSW EPA</div>
+      <div class="cmp-form">
+        <div class="fld">
+          <label>NSW EPA waste classification</label>
+          <select id="cmp-cls">
+            <option value="">— Select —</option>
+            ${EPA_CLASSES.map(c => `<option value="${esc(c)}" ${c===cls?'selected':''}>${esc(c)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld">
+          <label>Disposal outcome</label>
+          <select id="cmp-out">
+            <option value="">— Select —</option>
+            ${DISPOSAL_OUTCOMES.map(o => `<option value="${esc(o)}" ${o===out?'selected':''}>${esc(o)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld">
+          <label>Diversion %</label>
+          <input type="number" id="cmp-dv" min="0" max="100" step="1" value="${dv===''?'':esc(dv)}">
+        </div>
+        <div class="fld">
+          <label>Facility EPA licence number</label>
+          <input type="text" id="cmp-epl" value="${esc(d.facility_epa_licence||'')}" placeholder="e.g. EPL 12345">
+        </div>
+        <div class="fld">
+          <label>Compliance notes</label>
+          <textarea id="cmp-notes" placeholder="Anything noteworthy for auditors…">${esc(d.compliance_notes||'')}</textarea>
+        </div>
+        <div class="fld">
+          <label>7-year retention date</label>
+          <div class="cmp-readonly">${esc(retentionDate(d))}</div>
+        </div>
+        <button class="btn-p teal" onclick="saveCompliance('${esc(d.id)}')"><i class="ti ti-device-floppy"></i> Save compliance</button>
+      </div>
+
+      <div class="cmp-mini">
+        <div class="cmp-mini-h">
+          <span class="lbl"><i class="ti ti-alert-triangle"></i> Nonconformances for this docket</span>
+          <button class="btn-s" onclick="openNCRPanel(null,'${esc(d.id)}')"><i class="ti ti-plus"></i> Raise NC</button>
+        </div>
+        <div id="cmp-nc-list"><div class="cmp-empty">Loading…</div></div>
+      </div>
+
+      <div class="cmp-mini" id="cmp-venm-wrap" style="display:${isVENM?'block':'none'}">
+        <div class="cmp-mini-h">
+          <span class="lbl"><i class="ti ti-certificate"></i> VENM certificates</span>
+          <button class="btn-s" onclick="openVENMPanel(null,'${esc(d.id)}')"><i class="ti ti-plus"></i> Add VENM cert</button>
+        </div>
+        <div id="cmp-venm-list"><div class="cmp-empty">Loading…</div></div>
+      </div>
+    </div>
+  `;
+
+  // Wire outcome → diversion default
+  const outSel = $('cmp-out');
+  if(outSel){
+    outSel.onchange = () => {
+      const v = outSel.value;
+      const dvEl = $('cmp-dv');
+      if(!dvEl) return;
+      if(v === 'Landfill') dvEl.value = 0;
+      else if(v === 'Recycled' || v === 'Recovered' || v === 'Reused') dvEl.value = 100;
+    };
+  }
+  // Wire classification change → show VENM section
+  const clsSel = $('cmp-cls');
+  if(clsSel){
+    clsSel.onchange = () => {
+      const isV = /VENM/i.test(clsSel.value);
+      const wrap = $('cmp-venm-wrap');
+      if(wrap) wrap.style.display = isV ? 'block' : 'none';
+    };
+  }
+
+  await loadNCRsForDocket(d.id);
+  if(isVENM) await loadVENMsForDocket(d.id);
+}
+
+async function loadNCRsForDocket(docketId){
+  const list = $('cmp-nc-list');
+  if(!list) return;
+  try {
+    const { data, error } = await sb.from('nonconformances').select('*').eq('docket_id', docketId).order('created_at', { ascending:false });
+    if(error) throw error;
+    if(!data || !data.length){ list.innerHTML = `<div class="cmp-empty">No nonconformances for this docket.</div>`; return; }
+    list.innerHTML = data.map(nc => `
+      <div class="cmp-row" onclick="openNCRPanel('${esc(nc.id)}')">
+        <div class="cmp-row-top">${ncPill(nc.status)}<span style="font-size:10px;color:var(--mt);font-family:ui-monospace,Menlo,monospace">${esc(nc.stage||'—')}</span></div>
+        <div class="cmp-row-desc">${esc(nc.description||'')}</div>
+        ${nc.corrective_action?`<div style="font-size:11px;color:#555;margin-top:4px"><strong>Corrective:</strong> ${esc(nc.corrective_action)}</div>`:''}
+        <div class="cmp-row-meta">${esc(nc.responsible_person||'—')} · ${esc(fmtDT(nc.created_at))}</div>
+      </div>
+    `).join('');
+  } catch(e){ list.innerHTML = `<div class="cmp-empty" style="color:var(--rd)">Error: ${esc(e.message)}</div>`; }
+}
+
+async function loadVENMsForDocket(docketId){
+  const list = $('cmp-venm-list');
+  if(!list) return;
+  try {
+    const { data, error } = await sb.from('venm_certificates').select('*').eq('docket_id', docketId).order('created_at', { ascending:false });
+    if(error) throw error;
+    if(!data || !data.length){ list.innerHTML = `<div class="cmp-empty">No VENM certificates yet.</div>`; return; }
+    list.innerHTML = data.map(v => `
+      <div class="cmp-row" onclick="openVENMPanel('${esc(v.id)}')">
+        <div class="cmp-row-desc">${esc(v.cert_number||'—')} — ${esc(v.nata_lab||'')}</div>
+        <div class="cmp-row-meta">Ref: ${esc(v.lab_reference||'—')} · Tested ${esc(fmtDate(v.test_date))}${v.cert_image_path?' · image attached':''}</div>
+      </div>
+    `).join('');
+  } catch(e){ list.innerHTML = `<div class="cmp-empty" style="color:var(--rd)">Error: ${esc(e.message)}</div>`; }
+}
+
+async function saveCompliance(docketId){
+  const cls = $('cmp-cls').value || null;
+  const out = $('cmp-out').value || null;
+  const dvRaw = $('cmp-dv').value;
+  const dv = (dvRaw === '' || dvRaw == null) ? null : Math.max(0, Math.min(100, Number(dvRaw)));
+  const epl = $('cmp-epl').value.trim() || null;
+  const notes = $('cmp-notes').value.trim() || null;
+  try {
+    const { error } = await sb.from('dockets').update({
+      epa_classification: cls,
+      disposal_outcome: out,
+      diversion_pct: dv,
+      facility_epa_licence: epl,
+      compliance_notes: notes
+    }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'compliance_updated', `EPA=${cls||'—'}; outcome=${out||'—'}; diversion=${dv==null?'—':dv}%; EPL=${epl||'—'}`);
+    showToast('Compliance saved.');
+    // Local sync so refreshDrawer reflects
+    const idx = DOCKETS.findIndex(x => x.id === docketId);
+    if(idx >= 0){
+      DOCKETS[idx] = { ...DOCKETS[idx], epa_classification: cls, disposal_outcome: out, diversion_pct: dv, facility_epa_licence: epl, compliance_notes: notes };
+    }
+  } catch(e){ showToast('Save failed: '+e.message); }
+}
+
+// ── COMPLIANCE — NCR register ──────────────────────────────────────────────
+async function loadNCRs(){
+  const body = $('nc-body');
+  if(!body) return;
+  body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--mt)">Loading…</td></tr>`;
+  try {
+    const { data, error } = await sb.from('nonconformances').select('*').order('created_at', { ascending:true });
+    if(error) throw error;
+    NCRS = data || [];
+    // Update badge
+    const openCount = NCRS.filter(n => n.status !== 'closed').length;
+    const bdg = $('bdg-ncrs'); if(bdg) bdg.textContent = openCount;
+    renderNCRs();
+  } catch(e){ body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--rd)">Error: ${esc(e.message)}</td></tr>`; }
+}
+
+function renderNCRs(){
+  const body = $('nc-body');
+  if(!body) return;
+  const statusF = $('nc-status').value;
+  const q = ($('nc-search').value||'').trim().toLowerCase();
+  // Sort newest-first for display, but assign NC# in original create order
+  const numbered = NCRS.map((nc, i) => ({ ...nc, _num: 'NC-' + String(i+1).padStart(3,'0') }));
+  const rows = numbered.slice().reverse().filter(nc => {
+    if(statusF && nc.status !== statusF) return false;
+    if(q){
+      const blob = [nc.docket_id, nc.description, nc.corrective_action, nc.responsible_person, nc._num].filter(Boolean).join(' ').toLowerCase();
+      if(!blob.includes(q)) return false;
+    }
+    return true;
+  });
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--mt)">No nonconformances</td></tr>`; return; }
+  body.innerHTML = rows.map(nc => {
+    const docket = DOCKETS.find(x => x.id === nc.docket_id);
+    const docketLabel = docket ? (nc.docket_id + ' — ' + clientNameOf(docket)) : (nc.docket_id || '—');
+    const desc = (nc.description||'').length > 60 ? (nc.description.slice(0,57) + '…') : (nc.description||'');
+    const corr = (nc.corrective_action||'').length > 60 ? (nc.corrective_action.slice(0,57) + '…') : (nc.corrective_action||'');
+    return `<tr style="cursor:pointer" onclick="openNCRPanel('${esc(nc.id)}')">
+      <td style="font-family:ui-monospace,Menlo,monospace;color:var(--mt)">${esc(nc._num)}</td>
+      <td>${ncPill(nc.status)}</td>
+      <td>${nc.docket_id?`<a href="javascript:void(0)" onclick="event.stopPropagation();openDrawer('${esc(nc.docket_id)}')" style="color:var(--mc);font-weight:600;text-decoration:none">${esc(docketLabel)}</a>`:'—'}</td>
+      <td><span class="pill grey">${esc(nc.stage||'—')}</span></td>
+      <td style="color:#1a1a1a">${esc(desc)}</td>
+      <td style="color:#555">${esc(corr)||'<span style="color:var(--mt)">—</span>'}</td>
+      <td>${esc(nc.responsible_person||'—')}</td>
+      <td style="color:var(--mt)">${esc(fmtDate(nc.created_at))}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openNCRPanel(ncId, docketIdHint){
+  _editingNcId = ncId || null;
+  const err = $('nc-err'); err.classList.remove('show'); err.textContent='';
+  // Populate docket dropdown
+  const sel = $('nc-docket');
+  sel.innerHTML = '<option value="">— Select docket —</option>' + DOCKETS.slice().sort((a,b)=>(a.id||'').localeCompare(b.id||'')).map(d => `<option value="${esc(d.id)}">${esc(d.id)} — ${esc(clientNameOf(d))}</option>`).join('');
+  if(ncId){
+    const nc = NCRS.find(n => n.id === ncId);
+    if(!nc){ showToast('NC not found'); return; }
+    $('nc-title').innerHTML = '<i class="ti ti-alert-triangle"></i> Edit nonconformance';
+    sel.value = nc.docket_id || '';
+    $('nc-stage').value = nc.stage || 'order';
+    $('nc-desc').value = nc.description || '';
+    $('nc-correct').value = nc.corrective_action || '';
+    $('nc-resp').value = nc.responsible_person || '';
+    $('nc-stat').value = nc.status || 'open';
+    $('nc-status-fld').style.display = '';
+    $('nc-close-row').style.display = nc.status === 'closed' ? 'none' : '';
+    $('nc-save-lbl').textContent = 'Save changes';
+  } else {
+    $('nc-title').innerHTML = '<i class="ti ti-alert-triangle"></i> Raise nonconformance';
+    sel.value = docketIdHint || '';
+    $('nc-stage').value = 'order';
+    $('nc-desc').value = '';
+    $('nc-correct').value = '';
+    $('nc-resp').value = currentUser ? currentUser.name : '';
+    $('nc-status-fld').style.display = 'none';
+    $('nc-close-row').style.display = 'none';
+    $('nc-save-lbl').textContent = 'Save NC';
+  }
+  $('nc-bk').classList.add('on');
+  $('nc-drawer').classList.add('on');
+}
+
+function closeNCRPanel(){
+  $('nc-bk').classList.remove('on');
+  $('nc-drawer').classList.remove('on');
+  _editingNcId = null;
+}
+
+async function saveNCR(){
+  const err = $('nc-err'); err.classList.remove('show'); err.textContent='';
+  const docketId = $('nc-docket').value;
+  const stage = $('nc-stage').value;
+  const desc = $('nc-desc').value.trim();
+  const corr = $('nc-correct').value.trim();
+  const resp = $('nc-resp').value.trim();
+  if(!docketId){ err.textContent='Docket is required.'; err.classList.add('show'); return; }
+  if(!desc){ err.textContent='Description is required.'; err.classList.add('show'); return; }
+  $('nc-save').disabled = true;
+  try {
+    if(_editingNcId){
+      const stat = $('nc-stat').value;
+      const patch = { stage, description: desc, corrective_action: corr||null, responsible_person: resp||null, status: stat };
+      // If closing, set closed_at
+      const prev = NCRS.find(n => n.id === _editingNcId);
+      if(stat === 'closed' && prev && prev.status !== 'closed'){ patch.closed_at = new Date().toISOString(); }
+      if(stat === 'open'){ patch.closed_at = null; }
+      const { error } = await sb.from('nonconformances').update(patch).eq('id', _editingNcId);
+      if(error) throw error;
+      await logAudit(docketId, 'nc_updated', desc.slice(0,200));
+      showToast('NC updated.');
+    } else {
+      const row = { docket_id: docketId, stage, description: desc, corrective_action: corr||null, responsible_person: resp||null, status: 'open', created_by: currentUser?currentUser.id:null };
+      const { error } = await sb.from('nonconformances').insert([row]);
+      if(error) throw error;
+      // Also flag the docket as has_nc
+      try { await sb.from('dockets').update({ has_nc: true }).eq('id', docketId); } catch(e){}
+      await logAudit(docketId, 'nc_raised', desc.slice(0,200));
+      showToast('NC raised.');
+    }
+    closeNCRPanel();
+    await loadNCRs();
+    if(activeDocket && activeDocket.id === docketId) await loadNCRsForDocket(docketId);
+  } catch(e){
+    err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
+  } finally { $('nc-save').disabled = false; }
+}
+
+async function closeNCRRecord(){
+  if(!_editingNcId) return;
+  const nc = NCRS.find(n => n.id === _editingNcId);
+  if(!nc) return;
+  try {
+    const { error } = await sb.from('nonconformances').update({ status:'closed', closed_at: new Date().toISOString() }).eq('id', _editingNcId);
+    if(error) throw error;
+    await logAudit(nc.docket_id, 'nc_closed', (nc.description||'').slice(0,200));
+    showToast('NC closed.');
+    closeNCRPanel();
+    await loadNCRs();
+    if(activeDocket && activeDocket.id === nc.docket_id) await loadNCRsForDocket(nc.docket_id);
+  } catch(e){ showToast('Close failed: '+e.message); }
+}
+
+// ── COMPLIANCE — VENM register ─────────────────────────────────────────────
+async function loadVENM(){
+  const body = $('vn-body');
+  if(!body) return;
+  body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">Loading…</td></tr>`;
+  try {
+    const { data, error } = await sb.from('venm_certificates').select('*').order('created_at', { ascending:true });
+    if(error) throw error;
+    VENMS = data || [];
+    renderVENM();
+  } catch(e){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--rd)">Error: ${esc(e.message)}</td></tr>`; }
+}
+
+function renderVENM(){
+  const body = $('vn-body');
+  if(!body) return;
+  const q = ($('vn-search').value||'').trim().toLowerCase();
+  const numbered = VENMS.map((v, i) => ({ ...v, _num: 'VC-' + String(i+1).padStart(3,'0') }));
+  const rows = numbered.slice().reverse().filter(v => {
+    if(!q) return true;
+    const blob = [v.docket_id, v.cert_number, v.nata_lab, v.lab_reference, v._num].filter(Boolean).join(' ').toLowerCase();
+    return blob.includes(q);
+  });
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">No VENM certificates</td></tr>`; return; }
+  body.innerHTML = rows.map(v => {
+    const docket = DOCKETS.find(x => x.id === v.docket_id);
+    const docketLabel = docket ? (v.docket_id + ' — ' + clientNameOf(docket)) : (v.docket_id || '—');
+    const imgUrl = v.cert_image_path ? sb.storage.from('docket-photos').getPublicUrl(v.cert_image_path).data.publicUrl : null;
+    return `<tr style="cursor:pointer" onclick="openVENMPanel('${esc(v.id)}')">
+      <td style="font-family:ui-monospace,Menlo,monospace;color:var(--mt)">${esc(v._num)}</td>
+      <td>${v.docket_id?`<a href="javascript:void(0)" onclick="event.stopPropagation();openDrawer('${esc(v.docket_id)}')" style="color:var(--mc);font-weight:600;text-decoration:none">${esc(docketLabel)}</a>`:'—'}</td>
+      <td>${esc(v.cert_number||'—')}</td>
+      <td>${esc(v.nata_lab||'—')}</td>
+      <td style="color:#555">${esc(v.lab_reference||'—')}</td>
+      <td>${esc(fmtDate(v.test_date))}</td>
+      <td>${imgUrl?`<a href="${esc(imgUrl)}" target="_blank" onclick="event.stopPropagation()" style="color:var(--or)"><i class="ti ti-photo"></i> View</a>`:'<span style="color:var(--mt)">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openVENMPanel(vnId, docketIdHint){
+  _editingVnId = vnId || null;
+  const err = $('vn-err'); err.classList.remove('show'); err.textContent='';
+  const sel = $('vn-docket');
+  sel.innerHTML = '<option value="">— Select docket —</option>' + DOCKETS.slice().sort((a,b)=>(a.id||'').localeCompare(b.id||'')).map(d => `<option value="${esc(d.id)}">${esc(d.id)} — ${esc(clientNameOf(d))}</option>`).join('');
+  $('vn-img').value = '';
+  $('vn-img-existing').textContent = '';
+  if(vnId){
+    const v = VENMS.find(x => x.id === vnId);
+    if(!v){ showToast('Cert not found'); return; }
+    $('vn-title').textContent = 'Edit VENM certificate';
+    sel.value = v.docket_id || '';
+    $('vn-cert').value = v.cert_number || '';
+    $('vn-lab').value = v.nata_lab || '';
+    $('vn-ref').value = v.lab_reference || '';
+    $('vn-date').value = v.test_date || '';
+    $('vn-notes').value = v.notes || '';
+    if(v.cert_image_path){ $('vn-img-existing').textContent = 'Existing image attached: ' + v.cert_image_path.split('/').pop(); }
+    $('vn-save-lbl').textContent = 'Save changes';
+  } else {
+    $('vn-title').textContent = 'Add VENM certificate';
+    sel.value = docketIdHint || '';
+    $('vn-cert').value = '';
+    $('vn-lab').value = '';
+    $('vn-ref').value = '';
+    $('vn-date').value = '';
+    $('vn-notes').value = '';
+    $('vn-save-lbl').textContent = 'Save cert';
+  }
+  $('vn-bk').classList.add('on');
+  $('vn-drawer').classList.add('on');
+}
+
+function closeVENMPanel(){
+  $('vn-bk').classList.remove('on');
+  $('vn-drawer').classList.remove('on');
+  _editingVnId = null;
+}
+
+async function saveVENM(){
+  const err = $('vn-err'); err.classList.remove('show'); err.textContent='';
+  const docketId = $('vn-docket').value;
+  const cert = $('vn-cert').value.trim();
+  const lab = $('vn-lab').value.trim();
+  const ref = $('vn-ref').value.trim();
+  const date = $('vn-date').value || null;
+  const notes = $('vn-notes').value.trim();
+  const file = $('vn-img').files && $('vn-img').files[0];
+  if(!docketId){ err.textContent='Docket is required.'; err.classList.add('show'); return; }
+  if(!cert){ err.textContent='Certificate number is required.'; err.classList.add('show'); return; }
+  if(!lab){ err.textContent='NATA lab is required.'; err.classList.add('show'); return; }
+  if(!date){ err.textContent='Test date is required.'; err.classList.add('show'); return; }
+  $('vn-save').disabled = true;
+  try {
+    let storagePath = null;
+    if(file){
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const path = `venm/${docketId}/${Date.now()}_${safeName}`;
+      const { error: upErr } = await sb.storage.from('docket-photos').upload(path, file, { contentType: file.type || 'image/jpeg', upsert:false });
+      if(upErr) throw upErr;
+      storagePath = path;
+    }
+    const row = {
+      docket_id: docketId,
+      cert_number: cert,
+      nata_lab: lab,
+      lab_reference: ref || null,
+      test_date: date,
+      notes: notes || null
+    };
+    if(storagePath) row.cert_image_path = storagePath;
+    if(_editingVnId){
+      const { error } = await sb.from('venm_certificates').update(row).eq('id', _editingVnId);
+      if(error) throw error;
+      await logAudit(docketId, 'venm_cert_updated', cert);
+      showToast('VENM cert updated.');
+    } else {
+      row.created_by = currentUser ? currentUser.id : null;
+      const { error } = await sb.from('venm_certificates').insert([row]);
+      if(error) throw error;
+      await logAudit(docketId, 'venm_cert_added', cert);
+      showToast('VENM cert saved.');
+    }
+    closeVENMPanel();
+    await loadVENM();
+    if(activeDocket && activeDocket.id === docketId) await loadVENMsForDocket(docketId);
+  } catch(e){
+    err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
+  } finally { $('vn-save').disabled = false; }
+}
+
+// ── COMPLIANCE — ISO audits ────────────────────────────────────────────────
+async function loadISO(){
+  const body = $('is-body');
+  if(!body) return;
+  body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">Loading…</td></tr>`;
+  try {
+    const { data, error } = await sb.from('iso_audits').select('*').order('audit_date', { ascending:false });
+    if(error) throw error;
+    ISOS = data || [];
+    renderISO();
+  } catch(e){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--rd)">Error: ${esc(e.message)}</td></tr>`; }
+}
+
+function renderISO(){
+  const body = $('is-body');
+  if(!body) return;
+  const q = ($('is-search').value||'').trim().toLowerCase();
+  // Ordinal numbers based on audit_date ascending — recompute
+  const ordered = ISOS.slice().sort((a,b)=>(a.audit_date||'').localeCompare(b.audit_date||''));
+  const idMap = {};
+  ordered.forEach((a, i) => { idMap[a.id] = 'IA-' + String(i+1).padStart(3,'0'); });
+  const rows = ISOS.filter(a => {
+    if(!q) return true;
+    const blob = [a.title, a.auditor_name, a.scope, idMap[a.id]].filter(Boolean).join(' ').toLowerCase();
+    return blob.includes(q);
+  });
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">No audits</td></tr>`; return; }
+  body.innerHTML = rows.map(a => {
+    const findings = Array.isArray(a.findings) ? a.findings : [];
+    const scope = (a.scope||'').length > 80 ? (a.scope.slice(0,77)+'…') : (a.scope||'');
+    const status = a.closed_at ? 'closed' : (a.overall_status || 'in_progress');
+    return `<tr style="cursor:pointer" onclick="openISOPanel('${esc(a.id)}')">
+      <td style="font-family:ui-monospace,Menlo,monospace;color:var(--mt)">${esc(idMap[a.id]||'—')}</td>
+      <td>${esc(fmtDate(a.audit_date))}</td>
+      <td style="font-weight:600;color:var(--mc)">${esc(a.title||'—')}</td>
+      <td>${esc(a.auditor_name||'—')}</td>
+      <td style="color:#555">${esc(scope)}</td>
+      <td>${isoStatusPill(status)}</td>
+      <td style="color:var(--mt)">${findings.length}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFindings(){
+  const wrap = $('is-findings');
+  if(!wrap) return;
+  if(!_isoFindings.length){ wrap.innerHTML = `<div class="cmp-empty">No findings yet. Click "Add finding" above.</div>`; return; }
+  wrap.innerHTML = _isoFindings.map((f, i) => `
+    <div class="find-row">
+      <div class="fr-head">
+        <span class="iso-clause">ISO ${esc(f.clause||'—')}</span>
+        <button class="fr-rm" onclick="removeFinding(${i})"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="fld-row">
+        <div class="fld">
+          <label>ISO clause</label>
+          <input type="text" data-fi="${i}" data-fk="clause" value="${esc(f.clause||'')}" placeholder="e.g. 6.3">
+        </div>
+        <div class="fld">
+          <label>Status</label>
+          <select data-fi="${i}" data-fk="status">
+            <option value="compliant" ${f.status==='compliant'?'selected':''}>Compliant</option>
+            <option value="minor_nc" ${f.status==='minor_nc'?'selected':''}>Minor NC</option>
+            <option value="major_nc" ${f.status==='major_nc'?'selected':''}>Major NC</option>
+            <option value="observation" ${f.status==='observation'?'selected':''}>Observation</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld">
+        <label>Description</label>
+        <input type="text" data-fi="${i}" data-fk="description" value="${esc(f.description||'')}" placeholder="What was found?">
+      </div>
+      <div class="fld">
+        <label>Corrective action</label>
+        <input type="text" data-fi="${i}" data-fk="corrective" value="${esc(f.corrective||'')}" placeholder="Action required">
+      </div>
+      <div class="fld">
+        <label>Due date</label>
+        <input type="date" data-fi="${i}" data-fk="due" value="${esc(f.due||'')}">
+      </div>
+    </div>
+  `).join('');
+  // Wire change handlers
+  wrap.querySelectorAll('[data-fi]').forEach(el => {
+    el.oninput = el.onchange = (e) => {
+      const i = Number(e.target.dataset.fi);
+      const k = e.target.dataset.fk;
+      if(_isoFindings[i]) _isoFindings[i][k] = e.target.value;
+    };
+  });
+}
+
+function addFinding(){
+  _isoFindings.push({ clause:'', status:'compliant', description:'', corrective:'', due:'' });
+  renderFindings();
+}
+
+function removeFinding(i){
+  _isoFindings.splice(i,1);
+  renderFindings();
+}
+
+function openISOPanel(isoId){
+  _editingIsoId = isoId || null;
+  const err = $('is-err'); err.classList.remove('show'); err.textContent='';
+  if(isoId){
+    const a = ISOS.find(x => x.id === isoId);
+    if(!a){ showToast('Audit not found'); return; }
+    $('is-title').textContent = 'Edit audit — ' + (a.title||'');
+    $('is-title-in').value = a.title || '';
+    $('is-date').value = a.audit_date || '';
+    $('is-auditor').value = a.auditor_name || '';
+    $('is-scope').value = a.scope || '';
+    $('is-status').value = a.overall_status || 'in_progress';
+    _isoFindings = Array.isArray(a.findings) ? JSON.parse(JSON.stringify(a.findings)) : [];
+    $('is-close-row').style.display = a.closed_at ? 'none' : '';
+    $('is-save-lbl').textContent = 'Save changes';
+  } else {
+    $('is-title').textContent = 'New ISO 14001 audit';
+    $('is-title-in').value = '';
+    const today = new Date();
+    $('is-date').value = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    $('is-auditor').value = currentUser ? currentUser.name : '';
+    $('is-scope').value = '';
+    $('is-status').value = 'in_progress';
+    _isoFindings = [];
+    $('is-close-row').style.display = 'none';
+    $('is-save-lbl').textContent = 'Save audit';
+  }
+  renderFindings();
+  $('is-bk').classList.add('on');
+  $('is-drawer').classList.add('on');
+}
+
+function closeISOPanel(){
+  $('is-bk').classList.remove('on');
+  $('is-drawer').classList.remove('on');
+  _editingIsoId = null;
+  _isoFindings = [];
+}
+
+async function saveISO(){
+  const err = $('is-err'); err.classList.remove('show'); err.textContent='';
+  const title = $('is-title-in').value.trim();
+  const date = $('is-date').value || null;
+  const auditor = $('is-auditor').value.trim();
+  const scope = $('is-scope').value.trim() || null;
+  const status = $('is-status').value;
+  if(!title){ err.textContent='Title is required.'; err.classList.add('show'); return; }
+  if(!date){ err.textContent='Audit date is required.'; err.classList.add('show'); return; }
+  if(!auditor){ err.textContent='Auditor name is required.'; err.classList.add('show'); return; }
+  $('is-save').disabled = true;
+  try {
+    const row = {
+      title,
+      audit_date: date,
+      auditor_name: auditor,
+      scope,
+      overall_status: status,
+      findings: _isoFindings
+    };
+    if(_editingIsoId){
+      const { error } = await sb.from('iso_audits').update(row).eq('id', _editingIsoId);
+      if(error) throw error;
+      showToast('Audit updated.');
+    } else {
+      row.created_by = currentUser ? currentUser.id : null;
+      const { error } = await sb.from('iso_audits').insert([row]);
+      if(error) throw error;
+      showToast('Audit saved.');
+    }
+    closeISOPanel();
+    await loadISO();
+  } catch(e){
+    err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
+  } finally { $('is-save').disabled = false; }
+}
+
+async function markISOClosed(){
+  if(!_editingIsoId) return;
+  try {
+    const { error } = await sb.from('iso_audits').update({ closed_at: new Date().toISOString(), closed_by: currentUser?currentUser.id:null }).eq('id', _editingIsoId);
+    if(error) throw error;
+    showToast('Audit closed.');
+    closeISOPanel();
+    await loadISO();
+  } catch(e){ showToast('Close failed: '+e.message); }
 }
 
 // ── PHOTOS ─────────────────────────────────────────────────────────────────
@@ -1369,6 +2275,13 @@ async function init(){
     await loadClientsFromDB();
     await loadDriversFromDB();
     await loadDocketsFromDB();
+    // Preload NCR count for sidebar badge (non-blocking on error)
+    try {
+      const { data: ncData } = await sb.from('nonconformances').select('id,status');
+      NCRS = ncData || [];
+      const openCount = NCRS.filter(n => n.status !== 'closed').length;
+      const bdg = $('bdg-ncrs'); if(bdg) bdg.textContent = openCount;
+    } catch(e){ console.warn('NCR preload', e); }
     subscribeToRealtime();
     bootApp();
   } catch(e){
@@ -1388,6 +2301,10 @@ function bootApp(){
   $('dr-showInactive').onchange = renderDrivers;
   $('al-action').onchange = loadAuditLog;
   $('al-driver').onchange = loadAuditLog;
+  const ncS = $('nc-status'); if(ncS) ncS.onchange = renderNCRs;
+  const ncQ = $('nc-search'); if(ncQ) ncQ.oninput = renderNCRs;
+  const vnQ = $('vn-search'); if(vnQ) vnQ.oninput = renderVENM;
+  const isQ = $('is-search'); if(isQ) isQ.oninput = renderISO;
   showScreen('dockets');
 }
 
@@ -1908,27 +2825,109 @@ async function generateDocketPDF(docketId, copyType){
 
     if(copyType === 'internal'){
       drawSectionTitle('Compliance — ISO 14001:2026 / NSW EPA');
-      const retain = new Date();
+      const retainBase = docket.submitted_at || docket.created_at;
+      const retain = retainBase ? new Date(retainBase) : new Date();
       retain.setFullYear(retain.getFullYear() + 7);
       const retainStr = _dpDate(retain);
       drawTable(
         ['EPA Waste Classification','Disposal Outcome','Diversion %','Retain Until'],
         [
-          docket.waste_type || '—',
+          docket.epa_classification || docket.waste_type || '—',
           docket.disposal_outcome || (docket.facility && /recycl/i.test(docket.facility) ? 'Recycled' : 'Landfill'),
           docket.diversion_pct != null ? Number(docket.diversion_pct).toFixed(0) + '%' : '0%',
           retainStr
         ]
       );
+      drawTable(
+        ['Facility EPA Licence','Compliance Notes'],
+        [
+          docket.facility_epa_licence || '—',
+          docket.compliance_notes || '—'
+        ],
+        { colWidths: [60, PW - 2*M - 60] }
+      );
 
-      if(docket.has_nc){
+      // Load NCs + VENM certs for this docket
+      let ncList = [];
+      let venmList = [];
+      try {
+        const { data: ncRows } = await sb.from('nonconformances').select('*').eq('docket_id', docketId).order('created_at', { ascending:true });
+        ncList = ncRows || [];
+      } catch(e){ console.warn('PDF nc load', e); }
+      try {
+        const { data: vnRows } = await sb.from('venm_certificates').select('*').eq('docket_id', docketId).order('created_at', { ascending:true });
+        venmList = vnRows || [];
+      } catch(e){ console.warn('PDF venm load', e); }
+
+      drawSubsection('Nonconformances');
+      if(ncList.length){
+        doc.autoTable({
+          head: [['Status','Stage','Description','Corrective Action','Responsible','Created']],
+          body: ncList.map(nc => [
+            nc.status === 'closed' ? 'Closed' : 'Open',
+            nc.stage || '—',
+            nc.description || '—',
+            nc.corrective_action || '—',
+            nc.responsible_person || '—',
+            _dpDate(nc.created_at)
+          ]),
+          startY: cursorY,
+          margin: { left: M, right: M },
+          styles: { font:'helvetica', fontSize: 8, cellPadding: 1.8, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign:'top' },
+          headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8, halign:'left' },
+          columnStyles: { 0:{cellWidth:18}, 1:{cellWidth:20}, 2:{cellWidth:54}, 3:{cellWidth:50}, 4:{cellWidth:24}, 5:{cellWidth:PW - 2*M - 166} },
+          theme: 'grid',
+          rowPageBreak: 'avoid'
+        });
+        cursorY = doc.lastAutoTable.finalY + 4;
+      } else {
+        doc.setTextColor.apply(doc, GREY); doc.setFont('helvetica','italic'); doc.setFontSize(9);
+        doc.text('No nonconformances raised against this docket.', M, cursorY + 4);
+        cursorY += 6;
+      }
+
+      const isVENM = (docket.waste_type === 'VENM') || (docket.epa_classification && /VENM/i.test(docket.epa_classification));
+      if(venmList.length || isVENM){
+        drawSubsection('VENM certificates');
+        if(venmList.length){
+          doc.autoTable({
+            head: [['Cert Number','NATA Lab','Lab Ref','Test Date','Notes']],
+            body: venmList.map(v => [
+              v.cert_number || '—',
+              v.nata_lab || '—',
+              v.lab_reference || '—',
+              _dpDate(v.test_date),
+              v.notes || '—'
+            ]),
+            startY: cursorY,
+            margin: { left: M, right: M },
+            styles: { font:'helvetica', fontSize: 8, cellPadding: 1.8, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign:'top' },
+            headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8, halign:'left' },
+            columnStyles: { 0:{cellWidth:34}, 1:{cellWidth:48}, 2:{cellWidth:30}, 3:{cellWidth:24}, 4:{cellWidth:PW - 2*M - 136} },
+            theme: 'grid',
+            rowPageBreak: 'avoid'
+          });
+          cursorY = doc.lastAutoTable.finalY + 4;
+        } else {
+          ensureSpace(12);
+          doc.setFillColor(254,248,232);
+          doc.setDrawColor(232,170,40); doc.setLineWidth(0.3);
+          doc.roundedRect(M, cursorY, PW - 2*M, 9, 1, 1, 'FD');
+          doc.setTextColor.apply(doc, DARK);
+          doc.setFont('helvetica','bold'); doc.setFontSize(9);
+          doc.text('VENM waste classified — NATA certificate(s) required but none on file.', M + 3, cursorY + 6);
+          cursorY += 12;
+        }
+      }
+
+      if(docket.has_nc && !ncList.length){
         ensureSpace(14);
         doc.setFillColor(252,232,232);
         doc.setDrawColor(196,80,80); doc.setLineWidth(0.3);
         doc.roundedRect(M, cursorY, PW - 2*M, 10, 1, 1, 'FD');
         doc.setTextColor.apply(doc, DARK);
         doc.setFont('helvetica','bold'); doc.setFontSize(9);
-        doc.text('Non-conformance recorded — refer to NC register for corrective action.', M + 3, cursorY + 6.5);
+        doc.text('Non-conformance flagged on docket — refer to NC register for details.', M + 3, cursorY + 6.5);
         cursorY += 13;
       }
 
