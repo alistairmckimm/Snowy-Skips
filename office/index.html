@@ -6,6 +6,8 @@
 <title>Snowy Skips — Office</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--mc:#0a2240;--or:#e8611a;--tl:#1D9E75;--rd:#A32D2D;--am:#854F0B;--bg:#eef1f5;--card:#fff;--bd:#e3e6ec;--mt:#7b8494}
@@ -876,6 +878,10 @@ function renderDrawerActions(d){
   const canInvoice = stage < 6;
   $('dr-actions').innerHTML = `
     <div class="row">
+      <button class="btn-o" onclick="generateDocketPDF('${esc(d.id)}','client')"><i class="ti ti-file-text"></i> Download Client PDF</button>
+      <button class="btn-o" onclick="generateDocketPDF('${esc(d.id)}','internal')"><i class="ti ti-file-invoice"></i> Download Internal PDF</button>
+    </div>
+    <div class="row">
       <button class="btn-p" ${canNext?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveNext('${esc(d.id)}')"><i class="ti ti-arrow-right"></i> Move to next stage</button>
       <button class="btn-p teal" ${canInvoice?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveToInvoice('${esc(d.id)}')"><i class="ti ti-receipt-2"></i> Move to Invoice</button>
     </div>
@@ -1216,6 +1222,609 @@ sb.auth.onAuthStateChange((event, session) => {
   if(event === 'SIGNED_OUT'){ currentUser = null; showLogin(); }
   if(event === 'SIGNED_IN'){ init(); }  // re-init instead of full page reload
 });
+
+// ── PDF GENERATION ─────────────────────────────────────────────────────────
+async function _urlToDataURL(url){
+  try {
+    const r = await fetch(url);
+    if(!r.ok) return null;
+    const blob = await r.blob();
+    return await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch(e){ return null; }
+}
+
+// Convert hex (#RRGGBB) → [r,g,b]
+function _hex(h){ h = h.replace('#',''); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; }
+
+// Format date Dashpivot-style: "Jun 7, 2024"
+function _dpDate(s){
+  if(!s) return '';
+  const dt = new Date(s);
+  if(isNaN(dt)){
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(m){
+      const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return M[parseInt(m[2],10)-1] + ' ' + parseInt(m[3],10) + ', ' + m[1];
+    }
+    return String(s);
+  }
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return M[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear();
+}
+
+// Format full timestamp Dashpivot-style: "Tue, Jun 7 2024 9:00 AM"
+function _dpDT(s){
+  if(!s) return '';
+  const dt = new Date(s);
+  if(isNaN(dt)) return String(s);
+  const D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h = dt.getHours(), m = dt.getMinutes();
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if(h === 0) h = 12;
+  const mm = m < 10 ? '0' + m : '' + m;
+  return D[dt.getDay()] + ', ' + M[dt.getMonth()] + ' ' + dt.getDate() + ' ' + dt.getFullYear() + ' ' + h + ':' + mm + ' ' + ap;
+}
+
+function _slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'docket'; }
+
+async function generateDocketPDF(docketId, copyType){
+  if(!window.jspdf || !window.jspdf.jsPDF){ showToast('PDF library not loaded'); return; }
+  showToast('Generating PDF…');
+  try {
+    const { data: docket, error: dErr } = await sb.from('dockets').select('*').eq('id', docketId).single();
+    if(dErr) throw dErr;
+    if(!docket){ showToast('Docket not found'); return; }
+
+    const clientObj = CLIENTS.find(c => c.id === docket.client_id) || null;
+    const clientName = clientNameOf(docket);
+    const clientFolder = clientObj ? clientObj.name : (docket.client_name || docket.oneoff_name || 'General');
+    const clientSlug = _slugify(clientObj ? (clientObj.short_code || clientObj.name) : (docket.oneoff_name || 'general'));
+
+    const { data: photoRows } = await sb.from('photos').select('*').eq('docket_id', docketId).order('uploaded_at', { ascending:true });
+    const photos = (photoRows||[]).map(p => {
+      const { data: pub } = sb.storage.from('docket-photos').getPublicUrl(p.storage_path);
+      return { zone: p.zone, publicUrl: pub.publicUrl };
+    });
+
+    let audit = [];
+    if(copyType === 'internal'){
+      const { data: auditRows } = await sb.from('audit_log').select('*').eq('docket_id', docketId).order('performed_at', { ascending:true });
+      audit = auditRows || [];
+    }
+
+    const zonesNeeded = ['arr','pu','tip','rec'];
+    const photoData = {};
+    await Promise.all(zonesNeeded.map(async (z) => {
+      const all = photos.filter(p => p.zone === z);
+      const inZone = all.slice(0, 4);
+      photoData[z] = { extra: all.length - inZone.length, items: [] };
+      for(const p of inZone){
+        const dataUrl = await _urlToDataURL(p.publicUrl);
+        if(dataUrl) photoData[z].items.push(dataUrl);
+      }
+    }));
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'mm', format:'a4', compress:true });
+    const PW = 210, PH = 297, M = 18;
+    const HDR_H = 26, FTR_H = 18;
+    const BODY_TOP = HDR_H + 4;
+    const BODY_BOTTOM = PH - FTR_H;
+
+    const TEAL = _hex('#3FB1B5');
+    const GREY = _hex('#666666');
+    const DARK = _hex('#1A1A1A');
+    const LIGHT = _hex('#E5E5E5');
+    const TABLE_HEAD_BG = _hex('#3FB1B5');
+    const NAVY = _hex('#0A2240');
+
+    const printedAtStr = _dpDT(new Date());
+
+    let cursorY = BODY_TOP;
+
+    function drawHeader(){
+      const lx = M, ly = 8;
+      doc.setFillColor.apply(doc, TEAL);
+      doc.roundedRect(lx, ly, 9, 9, 1.5, 1.5, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      doc.text('S', lx + 4.5, ly + 6.3, { align:'center' });
+      doc.setTextColor.apply(doc, NAVY);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      doc.text('Snowy Skips', lx + 12, ly + 4.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.setTextColor.apply(doc, GREY);
+      doc.text('McKimm Civil Pty Ltd', lx + 12, ly + 8.6);
+
+      doc.setFont('helvetica','bold'); doc.setFontSize(7);
+      doc.setTextColor.apply(doc, GREY);
+      doc.text('Filepath:', lx, ly + 13.5);
+      doc.setFont('helvetica','normal');
+      doc.text(' McKimm Civil Pty Ltd / Snowy Skips / ' + clientFolder, lx + 11, ly + 13.5);
+
+      const rx = PW - M;
+      doc.setFont('helvetica','bold'); doc.setFontSize(7);
+      doc.setTextColor.apply(doc, GREY);
+      doc.text('Template ID:', rx - 27, ly + 2.5);
+      doc.setFont('helvetica','normal');
+      doc.text('MCK-Waste Disposal', rx, ly + 2.5, { align:'right' });
+      doc.setFont('helvetica','bold');
+      doc.text('Template Version:', rx - 27, ly + 6.5);
+      doc.setFont('helvetica','normal');
+      doc.text('v64', rx, ly + 6.5, { align:'right' });
+      doc.setFont('helvetica','bold');
+      doc.text('Form Version:', rx - 27, ly + 10.5);
+      doc.setFont('helvetica','normal');
+      doc.text('v3.4', rx, ly + 10.5, { align:'right' });
+      doc.setFont('helvetica','bold');
+      doc.text('Copy:', rx - 27, ly + 14.5);
+      doc.setFont('helvetica','normal');
+      doc.text(copyType === 'client' ? 'Client' : 'Internal', rx, ly + 14.5, { align:'right' });
+
+      doc.setDrawColor.apply(doc, TEAL);
+      doc.setLineWidth(0.6);
+      doc.line(M, HDR_H, PW - M, HDR_H);
+      doc.setLineWidth(0.2);
+    }
+
+    function drawFooter(){
+      doc.setDrawColor.apply(doc, TEAL);
+      doc.setLineWidth(0.6);
+      doc.line(M, PH - FTR_H + 4, PW - M, PH - FTR_H + 4);
+      doc.setLineWidth(0.2);
+      const ftrY = PH - FTR_H + 9;
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      doc.text('Printed version is uncontrolled', M, ftrY);
+      const totalPages = doc.internal.getNumberOfPages();
+      const curPage = doc.internal.getCurrentPageInfo().pageNumber;
+      doc.text('Page ' + curPage + ' of ' + totalPages, M, ftrY + 4);
+      doc.text('This PDF was created at', PW - M, ftrY, { align:'right' });
+      doc.text(printedAtStr, PW - M, ftrY + 4, { align:'right' });
+      doc.setFontSize(6.5);
+      doc.text('McKimm Civil Pty Ltd trading as Snowy Skips · NSW EPA waste tracking', PW/2, ftrY + 8, { align:'center' });
+    }
+
+    function newPage(){ doc.addPage(); drawHeader(); cursorY = BODY_TOP; }
+    function ensureSpace(needed){ if(cursorY + needed > BODY_BOTTOM) newPage(); }
+
+    function drawSectionTitle(title){
+      ensureSpace(11);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','normal'); doc.setFontSize(12);
+      doc.text(title, M, cursorY + 5);
+      cursorY += 7;
+      doc.setDrawColor.apply(doc, LIGHT);
+      doc.setLineWidth(0.3);
+      doc.line(M, cursorY, PW - M, cursorY);
+      cursorY += 3;
+      doc.setLineWidth(0.2);
+    }
+
+    function drawDescription(text){
+      const lines = doc.splitTextToSize(text, PW - 2*M);
+      ensureSpace(lines.length * 4 + 4);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9);
+      doc.text(lines, M, cursorY + 3);
+      cursorY += lines.length * 4 + 4;
+    }
+
+    function drawSubsection(text){
+      ensureSpace(7);
+      doc.setTextColor.apply(doc, DARK);
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.text(text, M, cursorY + 4);
+      cursorY += 6;
+    }
+
+    function drawTable(headers, row, opts){
+      opts = opts || {};
+      ensureSpace(20);
+      const colCount = headers.length;
+      const usableW = PW - 2*M;
+      const colWidths = opts.colWidths || Array(colCount).fill(usableW / colCount);
+      const columnStyles = {};
+      colWidths.forEach((w, i) => { columnStyles[i] = { cellWidth: w }; });
+      doc.autoTable({
+        head: [headers],
+        body: [row],
+        startY: cursorY,
+        margin: { left: M, right: M },
+        styles: { font:'helvetica', fontSize: 9, cellPadding: 2.4, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign: 'middle' },
+        headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8.5, halign:'left' },
+        bodyStyles: { fillColor:[255,255,255] },
+        columnStyles,
+        theme: 'grid',
+        tableWidth: usableW,
+        pageBreak: 'auto',
+        rowPageBreak: 'avoid'
+      });
+      cursorY = doc.lastAutoTable.finalY + 4;
+    }
+
+    function drawPill(text, x, yPos, fill){
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      const txtW = doc.getTextWidth(text);
+      const pillW = txtW + 8, pillH = 6;
+      doc.setFillColor.apply(doc, fill || TEAL);
+      doc.roundedRect(x, yPos - pillH + 1.2, pillW, pillH, 1.4, 1.4, 'F');
+      doc.setTextColor(255,255,255);
+      doc.text(text, x + pillW/2, yPos - 0.4, { align:'center' });
+      return pillW;
+    }
+
+    function drawLabelPill(label, value){
+      ensureSpace(10);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text(label, M, cursorY + 4);
+      const labelW = doc.getTextWidth(label);
+      drawPill(value, M + labelW + 6, cursorY + 5, TEAL);
+      cursorY += 8;
+    }
+
+    function drawPillRow(label, values){
+      if(!values || !values.length) return;
+      ensureSpace(10);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text(label, M, cursorY + 4);
+      let x = M + doc.getTextWidth(label) + 6;
+      values.forEach(v => {
+        const w = drawPill(String(v), x, cursorY + 5, TEAL);
+        x += w + 3;
+        if(x > PW - M - 20){ cursorY += 7; x = M + doc.getTextWidth(label) + 6; ensureSpace(8); }
+      });
+      cursorY += 8;
+    }
+
+    function drawSignatureBlock(label, sig){
+      ensureSpace(34);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.text(label, M, cursorY + 4);
+      cursorY += 5;
+      const boxX = M, boxY = cursorY, boxW = 70, boxH = 22;
+      doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.3);
+      doc.rect(boxX, boxY, boxW, boxH);
+      const sigImg = sig && (sig.sig_img || sig.sigImg);
+      if(sigImg){
+        try { doc.addImage(sigImg, 'PNG', boxX + 2, boxY + 2, boxW - 4, boxH - 4); }
+        catch(e){ try { doc.addImage(sigImg, 'JPEG', boxX + 2, boxY + 2, boxW - 4, boxH - 4); } catch(e2){} }
+      } else {
+        doc.setTextColor.apply(doc, GREY);
+        doc.setFont('helvetica','italic'); doc.setFontSize(9);
+        doc.text('—', boxX + boxW/2, boxY + boxH/2 + 1, { align:'center' });
+      }
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.setTextColor.apply(doc, DARK);
+      const by = (sig && sig.by) ? String(sig.by) : '—';
+      doc.text(by, boxX, boxY + boxH + 5);
+      doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
+      const at = (sig && sig.at) ? String(sig.at) : '';
+      if(at) doc.text(_dpDT(at), boxX, boxY + boxH + 9);
+      cursorY = boxY + boxH + 13;
+    }
+
+    async function drawPhotoStrip(zone, label){
+      const pd = photoData[zone];
+      if(!pd || !pd.items.length) return;
+      ensureSpace(40);
+      if(label){
+        doc.setTextColor.apply(doc, GREY);
+        doc.setFont('helvetica','normal'); doc.setFontSize(9);
+        doc.text(label, M, cursorY + 3);
+        cursorY += 5;
+      }
+      const tileW = 36, tileH = 28, gap = 3;
+      let x = M;
+      pd.items.forEach(src => {
+        if(x + tileW > PW - M){ x = M; cursorY += tileH + gap; ensureSpace(tileH + gap); }
+        try { doc.addImage(src, 'JPEG', x, cursorY, tileW, tileH); }
+        catch(e){ try { doc.addImage(src, 'PNG', x, cursorY, tileW, tileH); } catch(e2){} }
+        doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.2);
+        doc.rect(x, cursorY, tileW, tileH);
+        x += tileW + gap;
+      });
+      cursorY += tileH + 3;
+      if(pd.extra > 0){
+        doc.setTextColor.apply(doc, GREY); doc.setFont('helvetica','italic'); doc.setFontSize(8);
+        doc.text('+ ' + pd.extra + ' more photo(s) in office records', M, cursorY + 3);
+        cursorY += 5;
+      }
+    }
+
+    function drawLockedNotice(){
+      ensureSpace(16);
+      doc.setFillColor(244,248,248);
+      doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.3);
+      doc.roundedRect(M, cursorY, PW - 2*M, 12, 1, 1, 'FD');
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.text('[Locked]  The fields above are locked since the form is signed. The office can clear the signatures to unlock.', M + 3, cursorY + 7);
+      cursorY += 16;
+    }
+
+    drawHeader();
+    cursorY = BODY_TOP;
+
+    ensureSpace(20);
+    doc.setTextColor.apply(doc, DARK);
+    doc.setFont('helvetica','bold'); doc.setFontSize(22);
+    doc.text('Waste Disposal Docket', M, cursorY + 8);
+
+    const creator = DRIVERS.find(d => d.id === docket.created_by) || DRIVERS.find(d => d.id === docket.submitted_by);
+    const creatorName = creator ? creator.name : 'Driver';
+    const creatorInit = initials(creatorName);
+    const avX = PW - M - 8, avY = cursorY + 3;
+    doc.setFillColor(38, 153, 117);
+    doc.circle(avX, avY + 4, 4.5, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.text(creatorInit, avX, avY + 5.4, { align:'center' });
+    doc.setTextColor.apply(doc, DARK);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text(creatorName, avX - 7, avY + 3, { align:'right' });
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+    doc.setTextColor.apply(doc, GREY);
+    const createdLine = 'Created ' + (_dpDT(docket.created_at) || '—');
+    doc.text(createdLine, avX - 7, avY + 7, { align:'right' });
+    cursorY += 14;
+
+    ensureSpace(8);
+    doc.setTextColor.apply(doc, GREY);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.text('Automated Form Number', M, cursorY + 4);
+    doc.setTextColor.apply(doc, DARK);
+    const autoNum = 'McKimm Civil Pty Ltd-Snowy Skips-' + clientFolder + '-MCK-Waste Disposal-' + (docket.id || '');
+    doc.text(autoNum, M + 55, cursorY + 4);
+    cursorY += 7;
+    doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.3);
+    doc.line(M, cursorY, PW - M, cursorY);
+    cursorY += 4;
+
+    drawSectionTitle('Docket Instructions');
+    drawDescription(
+      'A new Docket is required for each Skip Bin, IBC or Truck allocated to a Site. ' +
+      'Each entry must have a unique Waste Disposal receipt from the Landfill Site. ' +
+      'Do not add extra Bins using the "Blue Plus" icon — Start a new Docket. ' +
+      'All fields must be entered, unless noted in the section Instructions. ' +
+      'Contact Administration if a Location is not in the list.'
+    );
+
+    drawSectionTitle('Date / Location');
+    drawTable(['Date','Location'], [_dpDate(docket.date), docket.site || '—']);
+
+    drawSectionTitle('Waste Amount');
+    drawDescription('The following Table will automatically fill upon completion of the Waste Disposal Section of this form.');
+    drawTable(
+      ['Recorded Net Weight (Tonnes)','Recorded Cubic Metres','Landfill Site'],
+      [
+        docket.weight != null ? Number(docket.weight).toFixed(2) : '—',
+        docket.cbm != null ? Number(docket.cbm).toFixed(2) : '—',
+        docket.facility || '—'
+      ]
+    );
+
+    drawSectionTitle('Order Details');
+    drawDescription('Insert the basic details as supplied by the Client for the Waste Pickup.');
+    drawSubsection('Order Received');
+    if(docket.oneoff_name || docket.oneoff_contact){
+      drawTable(['Client','Contact'], [docket.oneoff_name || clientName, docket.oneoff_contact || '—']);
+    }
+    drawTable(
+      ['Bin Type','Request Date','Proposed Waste Type','Comments'],
+      [docket.bin_type || '—', _dpDate(docket.date), docket.waste_type || '—', docket.comments || '—']
+    );
+    const sigs = docket.sigs || {};
+    drawSignatureBlock('Signature of Allocating Staff', sigs.order || sigs.delivery || null);
+
+    drawSectionTitle('Delivery Instructions');
+    drawDescription(
+      'Upon arrival at a Site, provide the details in the form and sign upon completion. ' +
+      'Vehicle registration is recorded for the Truck making the delivery, and the Bin number must be recorded. ' +
+      'Only provide an image if waste at pickup can be observed. Sign when completed.'
+    );
+    drawSubsection('Skip Bin Delivery / Truck Arrival');
+    const deliveryDriver = (sigs.delivery && sigs.delivery.by) || creatorName;
+    drawTable(
+      ['Delivery/Driver','Arrival Date','Arrival Time','Vehicle Registration','Bins'],
+      [
+        deliveryDriver,
+        _dpDate(docket.arr_date),
+        docket.arr_time || '—',
+        docket.rego || '—',
+        (docket.bins_delivered||[]).map(b=>'#'+b).join(', ') || '—'
+      ],
+      { colWidths: [38, 30, 26, 36, 44] }
+    );
+    await drawPhotoStrip('arr', 'Waste Image at Arrival');
+    drawLabelPill('Site Allocation', docket.bin_type || 'Truck');
+    drawSignatureBlock('Driver Signature at Delivery / Arrival', sigs.delivery);
+
+    drawSectionTitle('Pickup');
+    drawDescription(
+      'Employees must record the time of skip waste pickup or when a truck has been loaded. ' +
+      'This includes an image of the loaded skip or truck and identifying which bin is ready for disposal. ' +
+      'Employees must estimate the percentage of waste in each load based upon the categories given, eg concrete 30%, construction 70%. ' +
+      'The total must not be greater or less than 100%. If VENM waste is identified, the VENM Certificate must also be filled.'
+    );
+    drawSubsection('Waste Pickup Recording');
+    drawTable(
+      ['Pickup Date','Pickup Time','Vehicle Registration','Site Allocation','Bins','Comments'],
+      [
+        _dpDate(docket.pu_date),
+        docket.pu_time || '—',
+        docket.pu_rego || '—',
+        docket.bin_type || '—',
+        (docket.bins_picked_up||[]).map(b=>'#'+b).join(', ') || '—',
+        docket.comments || '—'
+      ],
+      { colWidths: [26, 22, 30, 26, 36, 34] }
+    );
+    await drawPhotoStrip('pu', 'Waste Pickup (Loaded)');
+    const pcts = docket.waste_pcts || {};
+    const pctEntries = Object.entries(pcts).filter(([,v]) => v && Number(v) > 0);
+    if(pctEntries.length){
+      drawPillRow('Waste Type', pctEntries.map(([k]) => k.charAt(0).toUpperCase() + k.slice(1)));
+      pctEntries.forEach(([k,v]) => {
+        const kCap = k.charAt(0).toUpperCase() + k.slice(1);
+        drawLabelPill(kCap + ' %', String(v) + '%');
+      });
+    }
+    if(pcts.venm && Number(pcts.venm) > 0){
+      ensureSpace(12);
+      doc.setFillColor(254,248,232);
+      doc.setDrawColor(232,170,40); doc.setLineWidth(0.3);
+      doc.roundedRect(M, cursorY, PW - 2*M, 9, 1, 1, 'FD');
+      doc.setTextColor.apply(doc, DARK);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text('VENM Detected — NATA Certificate Required', M + 3, cursorY + 6);
+      cursorY += 12;
+    }
+    drawSignatureBlock('Signature upon Pickup', sigs.pickup);
+
+    drawSectionTitle('Waste Disposal');
+    drawDescription(
+      'Employees must photograph the unloaded waste at the disposal facility. ' +
+      'The Disposal fields must be completed by using the data identified in the Landfill receipt. ' +
+      'The receipt must be photographed and kept for audit purposes.'
+    );
+    drawSubsection('Disposal Recording');
+    drawTable(
+      ['Disposal Date','Disposal Time','Disposal Facility','Net Weight (t)','Cubic Metres (m³)'],
+      [
+        _dpDate(docket.dis_date),
+        docket.dis_time || '—',
+        docket.facility || '—',
+        docket.weight != null ? Number(docket.weight).toFixed(2) : '—',
+        docket.cbm != null ? Number(docket.cbm).toFixed(2) : '—'
+      ],
+      { colWidths: [28, 24, 50, 30, 32] }
+    );
+    await drawPhotoStrip('tip', 'Disposal Facility Receipt / Tip Photos');
+    await drawPhotoStrip('rec', 'Recycling Photos');
+    drawSignatureBlock('Signature upon Disposal', sigs.disposal);
+
+    if(sigs.delivery || sigs.pickup || sigs.disposal){
+      drawLockedNotice();
+    }
+
+    drawSectionTitle('Form Attachments');
+    doc.setTextColor.apply(doc, GREY);
+    doc.setFont('helvetica','italic'); doc.setFontSize(9);
+    const totalPhotos = photos.length;
+    if(totalPhotos > 0){
+      doc.text(totalPhotos + ' photo(s) attached — see office storage for full-resolution originals.', M, cursorY + 4);
+    } else {
+      doc.text('No additional file attachments.', M, cursorY + 4);
+    }
+    cursorY += 8;
+
+    if(copyType === 'internal'){
+      drawSectionTitle('Compliance — ISO 14001:2026 / NSW EPA');
+      const retain = new Date();
+      retain.setFullYear(retain.getFullYear() + 7);
+      const retainStr = _dpDate(retain);
+      drawTable(
+        ['EPA Waste Classification','Disposal Outcome','Diversion %','Retain Until'],
+        [
+          docket.waste_type || '—',
+          docket.disposal_outcome || (docket.facility && /recycl/i.test(docket.facility) ? 'Recycled' : 'Landfill'),
+          docket.diversion_pct != null ? Number(docket.diversion_pct).toFixed(0) + '%' : '0%',
+          retainStr
+        ]
+      );
+
+      if(docket.has_nc){
+        ensureSpace(14);
+        doc.setFillColor(252,232,232);
+        doc.setDrawColor(196,80,80); doc.setLineWidth(0.3);
+        doc.roundedRect(M, cursorY, PW - 2*M, 10, 1, 1, 'FD');
+        doc.setTextColor.apply(doc, DARK);
+        doc.setFont('helvetica','bold'); doc.setFontSize(9);
+        doc.text('Non-conformance recorded — refer to NC register for corrective action.', M + 3, cursorY + 6.5);
+        cursorY += 13;
+      }
+
+      const sub = DRIVERS.find(d => d.id === docket.submitted_by);
+      drawTable(
+        ['Created By','Created At','Submitted By','Submitted At','Stage'],
+        [
+          creatorName,
+          _dpDT(docket.created_at),
+          sub ? sub.name : '—',
+          _dpDT(docket.submitted_at),
+          String(docket.stage || 1) + ' / 6'
+        ],
+        { colWidths: [32, 44, 32, 44, 16] }
+      );
+
+      drawSectionTitle('Audit Log');
+      if(audit.length){
+        const auditRows = audit.map(a => {
+          const who = (DRIVERS.find(d => d.id === a.performed_by)||{}).name || (a.performed_by ? 'user ' + String(a.performed_by).slice(0,6) : '—');
+          return [_dpDT(a.performed_at), who, String(a.action || ''), String(a.notes || '')];
+        });
+        doc.autoTable({
+          head: [['When','Who','Action','Notes']],
+          body: auditRows,
+          startY: cursorY,
+          margin: { left: M, right: M },
+          styles: { font:'helvetica', fontSize: 8, cellPadding: 1.8, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign: 'top' },
+          headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8, halign:'left' },
+          bodyStyles: { fillColor:[255,255,255] },
+          columnStyles: { 0:{cellWidth: 40}, 1:{cellWidth: 26}, 2:{cellWidth: 40}, 3:{cellWidth: PW - 2*M - 106} },
+          theme: 'grid',
+          rowPageBreak: 'avoid'
+        });
+        cursorY = doc.lastAutoTable.finalY + 4;
+      } else {
+        doc.setTextColor.apply(doc, GREY); doc.setFont('helvetica','italic'); doc.setFontSize(9);
+        doc.text('No audit entries recorded.', M, cursorY + 4);
+        cursorY += 6;
+      }
+    }
+
+    const total = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= total; i++){
+      doc.setPage(i);
+      drawFooter();
+    }
+
+    const ymd = (function(){
+      const dt = docket.date ? new Date(docket.date) : new Date();
+      const yyyy = dt.getFullYear();
+      const mm = String(dt.getMonth()+1).padStart(2,'0');
+      const dd = String(dt.getDate()).padStart(2,'0');
+      return '' + yyyy + mm + dd;
+    })();
+    const variantLabel = copyType === 'internal' ? 'Internal' : 'Client';
+    const filename = 'Snowy-Skips-' + docket.id + '-' + clientSlug + '-' + ymd + '-' + variantLabel + '.pdf';
+    doc.save(filename);
+    showToast('Done — downloaded ' + filename);
+
+    try {
+      await sb.from('audit_log').insert([{
+        docket_id: docketId,
+        action: 'pdf_generated:' + copyType,
+        action_type: 'export',
+        performed_by: currentUser && currentUser.id ? currentUser.id : null,
+        notes: filename
+      }]);
+    } catch(e){ console.warn('audit insert (pdf) failed', e); }
+  } catch(e){
+    console.error('generateDocketPDF', e);
+    showToast('PDF error: ' + (e.message || e));
+  }
+}
 
 // Watchdog — if init stalls, force login visible
 setTimeout(() => {
