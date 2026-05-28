@@ -268,6 +268,7 @@ table.t tbody tr:hover{background:#f7f9fc}
         <button class="btn-s" onclick="clearFilters()"><i class="ti ti-filter-off"></i> Clear</button>
         <span style="flex:1"></span>
         <button class="btn-o" onclick="refreshDockets()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p teal" onclick="openNewDocket()"><i class="ti ti-plus"></i> New docket</button>
       </div>
       <div class="kb" id="kb"></div>
     </section>
@@ -387,6 +388,74 @@ table.t tbody tr:hover{background:#f7f9fc}
     <div class="dr-pane" id="dp-audit"></div>
   </div>
   <div class="dr-actions" id="dr-actions"></div>
+</aside>
+
+<!-- NEW DOCKET PANEL -->
+<div class="drawer-bk" id="nd-bk" onclick="closeNewDocket()"></div>
+<aside class="drawer" id="nd-drawer">
+  <div class="dr-head">
+    <div>
+      <h3><i class="ti ti-plus"></i> New docket</h3>
+      <div class="sub">Create an order at stage 1 — awaiting delivery</div>
+    </div>
+    <button class="btn-x" onclick="closeNewDocket()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="nd-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Client / folder *</label>
+      <select id="nd-client"><option value="">— Select client —</option></select>
+    </div>
+    <div id="nd-oneoff-block" style="display:none;background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:11px">
+      <div style="font-size:10px;font-weight:700;color:#854F0B;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">One-off client details</div>
+      <div class="fld"><label>Client name *</label><input type="text" id="nd-oneoff-name" placeholder="e.g. Sarah Johnson"></div>
+      <div class="fld" style="margin-bottom:0"><label>Contact (phone or email)</label><input type="text" id="nd-oneoff-contact" placeholder="e.g. 0412 345 678"></div>
+    </div>
+    <div class="fld">
+      <label>Site / location *</label>
+      <input type="text" id="nd-site" placeholder="e.g. 12 Bordeaux St, Berridale">
+    </div>
+    <div class="fld">
+      <label>Date</label>
+      <input type="date" id="nd-date">
+    </div>
+    <div class="fld">
+      <label>Bin type</label>
+      <select id="nd-bintype">
+        <option>Skip Bin</option>
+        <option>Concrete Washout</option>
+        <option>IBC</option>
+        <option>Truck Body</option>
+        <option>Bulka Bag</option>
+        <option>Trailer 8x5</option>
+      </select>
+    </div>
+    <div class="fld">
+      <label>Waste type</label>
+      <select id="nd-wastetype">
+        <option>Construction</option>
+        <option>Concrete</option>
+        <option>Green Waste</option>
+        <option>Demolition (Building)</option>
+        <option>Steel/Metal</option>
+        <option>Timber</option>
+        <option>Domestic</option>
+        <option>Mixed</option>
+        <option>VENM</option>
+        <option>Hazardous</option>
+      </select>
+    </div>
+    <div class="fld">
+      <label>Comments (optional)</label>
+      <textarea id="nd-comments" placeholder="Anything the driver should know…"></textarea>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeNewDocket()">Cancel</button>
+      <button class="btn-p teal" id="nd-save" onclick="saveNewDocket()"><i class="ti ti-device-floppy"></i> <span id="nd-save-lbl">Save order</span></button>
+    </div>
+  </div>
 </aside>
 
 <!-- CLIENT MODAL -->
@@ -1163,6 +1232,115 @@ async function toggleDriverActive(id, active){
     renderDrivers();
     showToast(active?'Driver reactivated':'Driver deactivated');
   } catch(e){ showToast('Failed: '+e.message); }
+}
+
+// ── NEW DOCKET PANEL ──────────────────────────────────────────────────────
+async function generateDocketIdFromDB(){
+  try {
+    const { count } = await sb.from('dockets').select('*', { count:'exact', head:true });
+    let n = (count || 0) + 1;
+    for(let i=0;i<200;i++){
+      const id = 'MCK-' + String(n+i).padStart(3,'0');
+      const { data } = await sb.from('dockets').select('id').eq('id', id).maybeSingle();
+      if(!data) return id;
+    }
+    return 'MCK-' + String(Date.now()).slice(-6);
+  } catch(e){ console.error('generateDocketIdFromDB', e); return 'MCK-' + String(Date.now()).slice(-6); }
+}
+
+function openNewDocket(){
+  // Populate clients dropdown (active only, sorted)
+  const sel = $('nd-client');
+  const active = CLIENTS.filter(c => c.active).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  sel.innerHTML = '<option value="">— Select client —</option>' + active.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  sel.value = '';
+  $('nd-oneoff-name').value = '';
+  $('nd-oneoff-contact').value = '';
+  $('nd-oneoff-block').style.display = 'none';
+  $('nd-site').value = '';
+  // Default date = today
+  const dt = new Date();
+  const ymd = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+  $('nd-date').value = ymd;
+  $('nd-bintype').value = 'Skip Bin';
+  $('nd-wastetype').value = 'Construction';
+  $('nd-comments').value = '';
+  $('nd-err').classList.remove('show');
+  $('nd-err').textContent = '';
+  $('nd-save').disabled = false;
+  $('nd-save-lbl').textContent = 'Save order';
+  $('nd-bk').classList.add('on');
+  $('nd-drawer').classList.add('on');
+  // Listen for client change to toggle one-off block
+  sel.onchange = () => {
+    const c = CLIENTS.find(x => x.id === sel.value);
+    const isGen = c && (c.is_general || /general/i.test(c.name||''));
+    $('nd-oneoff-block').style.display = isGen ? '' : 'none';
+  };
+  setTimeout(() => sel.focus(), 80);
+}
+
+function closeNewDocket(){
+  $('nd-bk').classList.remove('on');
+  $('nd-drawer').classList.remove('on');
+}
+
+async function saveNewDocket(){
+  const err = $('nd-err'); err.classList.remove('show'); err.textContent = '';
+  const clientId = $('nd-client').value;
+  const client = CLIENTS.find(c => c.id === clientId);
+  const site = $('nd-site').value.trim();
+  const date = $('nd-date').value || null;
+  const binType = $('nd-bintype').value;
+  const wasteType = $('nd-wastetype').value;
+  const comments = $('nd-comments').value.trim();
+  const oneoffName = $('nd-oneoff-name').value.trim();
+  const oneoffContact = $('nd-oneoff-contact').value.trim();
+  if(!client){ err.textContent = 'Please pick a client / folder.'; err.classList.add('show'); return; }
+  if(!site){ err.textContent = 'Site / location is required.'; err.classList.add('show'); return; }
+  const isGen = client.is_general || /general/i.test(client.name||'');
+  if(isGen && !oneoffName){ err.textContent = 'One-off client name is required for General Skip Assignment.'; err.classList.add('show'); return; }
+
+  $('nd-save').disabled = true;
+  $('nd-save-lbl').textContent = 'Saving…';
+  try {
+    const id = await generateDocketIdFromDB();
+    const displayName = isGen ? oneoffName : client.name;
+    const row = {
+      id,
+      client_id: client.id,
+      client_name: displayName,
+      oneoff_name: isGen ? oneoffName : null,
+      oneoff_contact: isGen ? (oneoffContact || null) : null,
+      site,
+      date,
+      bin_type: binType,
+      waste_type: wasteType,
+      comments: comments || null,
+      stage: 1,
+      created_by: currentUser ? currentUser.id : null
+    };
+    const { error: insErr } = await sb.from('dockets').insert([row]);
+    if(insErr) throw insErr;
+    try {
+      await sb.from('audit_log').insert([{
+        docket_id: id,
+        action: 'order_created',
+        action_type: 'create',
+        performed_by: currentUser ? currentUser.id : null,
+        notes: 'Created in office app'
+      }]);
+    } catch(e){ console.warn('audit log (order_created) failed', e); }
+    closeNewDocket();
+    showToast('Order ' + id + ' saved. Awaiting delivery driver.');
+    // Realtime will refresh the board; force-load too in case the subscription is slow
+    loadDocketsFromDB();
+  } catch(e){
+    err.textContent = 'Save failed: ' + (e.message || e);
+    err.classList.add('show');
+    $('nd-save').disabled = false;
+    $('nd-save-lbl').textContent = 'Save order';
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
