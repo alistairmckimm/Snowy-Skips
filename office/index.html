@@ -1207,9 +1207,14 @@ function bootApp(){
   showScreen('dockets');
 }
 
+let _lastAuthEvent = 0;
 sb.auth.onAuthStateChange((event, session) => {
+  // Debounce: ignore events firing within 2s of each other to prevent reload loops on flaky networks
+  const now = Date.now();
+  if (event === 'SIGNED_IN' && now - _lastAuthEvent < 2000) return;
+  _lastAuthEvent = now;
   if(event === 'SIGNED_OUT'){ currentUser = null; showLogin(); }
-  if(event === 'SIGNED_IN'){ location.reload(); }
+  if(event === 'SIGNED_IN'){ init(); }  // re-init instead of full page reload
 });
 
 // Watchdog — if init stalls, force login visible
