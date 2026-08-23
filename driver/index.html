@@ -263,6 +263,14 @@ canvas{display:none}
 .btn-p.red{background:#A32D2D}
 .void-btn{width:26px;height:26px;border-radius:8px;border:1px solid #f0c4c4;background:#fdf0f0;color:#A32D2D;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit}
 .void-btn:active{background:#fbe0e0}
+.move-btn{width:26px;height:26px;border-radius:8px;border:1px solid #c7e0f0;background:#eaf3fa;color:#1B6FA8;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit}
+.move-btn:active{background:#d9ecf8}
+.mvj-row{display:flex;align-items:center;gap:10px;padding:12px 10px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;color:#222}
+.mvj-row:active{background:#f2f2f7}
+.mvj-row i{font-size:16px;color:#0a2240;width:18px;text-align:center}
+.mvj-row.add-new{color:var(--or)}
+.mvj-row.add-new i{color:var(--or)}
+.mvj-empty{font-size:13px;color:#888;padding:10px}
 </style>
 </head>
 <body>
@@ -650,6 +658,21 @@ canvas{display:none}
   </div>
 </div>
 
+<!-- ===== MOVE JOB TO CLIENT FOLDER MODAL ===== -->
+<div class="dpk-backdrop" id="mvj-backdrop" onclick="closeMoveJobModal()"></div>
+<div class="dpk-sheet" id="mvj-sheet">
+  <div class="dpk-grab"></div>
+  <div class="dpk-title">Move to client folder</div>
+  <div class="dp-card">
+    <p style="font-size:12px;color:#666;margin-bottom:10px;line-height:1.4">Moves this one-off job out of General Skip Assignment and into a client folder — pick an existing client, or add a new one.</p>
+    <div class="dp-err" id="mvj-err"></div>
+    <div id="mvj-list"></div>
+  </div>
+  <div class="sig-actions">
+    <button class="btn-s" style="flex:1" onclick="closeMoveJobModal()">Cancel</button>
+  </div>
+</div>
+
 <!-- ===== TOAST ===== -->
 <div class="toast" id="toast"></div>
 
@@ -683,7 +706,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-23.1';
+const APP_BUILD = 'build 2026-08-23.2';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -766,12 +789,21 @@ function jobCard(j) {
   const bins = (j.bins_pu&&j.bins_pu.length ? j.bins_pu : j.bins_del)||[];
   const binsLabel = bins.map(b=>'Bin '+b).join(', ') || '—';
   const fmtD = d => { if(!d)return '—'; const[y,m,day]=d.split('-');const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(day)+' '+M[parseInt(m)-1]; };
+  // "Move to folder" only makes sense for jobs still sitting in the General
+  // Skip Assignment bucket — a job already inside a client folder is already
+  // where it belongs.
+  const jFolder = FOLDERS.find(f => f.id === j.folder);
+  const isGeneralJob = !!(jFolder && jFolder.general);
+  const moveBtn = isGeneralJob ? `<button class="move-btn" onclick="event.stopPropagation();openMoveJobModal('${j.id}')" title="Move to client folder"><i class="ti ti-folder-plus"></i></button>` : '';
   return `<div class="job-card" id="jc-${j.id}">
     <div class="job-card-top">
       <div><div class="job-site">${j.site}</div><div class="job-id">${j.id} · ${fmtD(j.date)}</div></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
         <span class="job-stage-pill ${STAGE_CLASS[j.stage]}">${STAGE_LABELS[j.stage]}</span>
-        <button class="void-btn" onclick="event.stopPropagation();openVoidJobModal('${j.id}')" title="Void job"><i class="ti ti-trash"></i></button>
+        <div style="display:flex;gap:6px">
+          ${moveBtn}
+          <button class="void-btn" onclick="event.stopPropagation();openVoidJobModal('${j.id}')" title="Void job"><i class="ti ti-trash"></i></button>
+        </div>
       </div>
     </div>
     <div class="job-progress">${progSegs}</div>
@@ -1337,13 +1369,21 @@ async function saveClientModal() {
     if(r.error) throw r.error;
     const wasEditing = !!_editingClientId;
     const wasDocketForm = _clientModalContext === 'docketForm';
+    const wasMoveJob = _clientModalContext === 'moveJob';
     closeClientModal();
     await loadClientsFromDB();
     if(!wasEditing && wasDocketForm) {
       const sel = document.getElementById('f-client');
       if(sel) { sel.value = name; onClientChange(); }
     }
-    showToast(wasEditing ? 'Client updated' : 'Client added');
+    let handledByMove = false;
+    if(!wasEditing && wasMoveJob && _movingJobId) {
+      const newFolder = FOLDERS.find(f => f.name === name);
+      if(newFolder) { handledByMove = true; await moveJobToClient(newFolder.id); }
+    }
+    // Skip the generic toast when moveJobToClient() already showed its own
+    // "Moved to [Client] folder" confirmation — avoids two toasts in a row.
+    if(!handledByMove) showToast(wasEditing ? 'Client updated' : 'Client added');
   } catch(e) {
     err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
   } finally {
@@ -1506,6 +1546,61 @@ async function confirmVoidJob() {
     showToast('Job voided');
   } catch(e) {
     err.textContent = 'Void failed: ' + e.message; err.classList.add('show');
+  }
+}
+
+// ── MOVE JOB TO CLIENT FOLDER ────────────────────────────────────────────
+// For a General Skip Assignment (one-off) job that turns out to belong to
+// an existing (or brand-new) client — relinks just this one docket, same
+// scope as the office app's "Convert to client folder" action.
+let _movingJobId = null;
+function openMoveJobModal(jobId) {
+  _movingJobId = jobId;
+  document.getElementById('mvj-err').classList.remove('show');
+  renderMoveJobList();
+  document.getElementById('mvj-backdrop').classList.add('active');
+  document.getElementById('mvj-sheet').classList.add('active');
+}
+function closeMoveJobModal() {
+  document.getElementById('mvj-backdrop').classList.remove('active');
+  document.getElementById('mvj-sheet').classList.remove('active');
+  // Note: _movingJobId is deliberately NOT cleared here — when "+ Add new
+  // client…" is tapped this modal closes but the move is still in progress,
+  // to be completed once the new client is saved (see saveClientModal()).
+  // It's always overwritten fresh the next time a move starts.
+}
+function openAddClientForMove() {
+  closeMoveJobModal();
+  openClientModal(null, 'moveJob');
+}
+function renderMoveJobList() {
+  const list = document.getElementById('mvj-list'); if(!list) return;
+  const named = FOLDERS.filter(f => !f.general);
+  const rows = ['<div class="mvj-row add-new" onclick="openAddClientForMove()"><i class="ti ti-folder-plus"></i> + Add new client…</div>'];
+  if(!named.length) rows.push('<div class="mvj-empty">No client folders yet — add one above.</div>');
+  named.forEach(f => {
+    rows.push(`<div class="mvj-row" onclick="moveJobToClient('${f.id}')"><i class="ti ${f.icon}"></i> ${f.name}</div>`);
+  });
+  list.innerHTML = rows.join('');
+}
+async function moveJobToClient(folderId) {
+  if(!_movingJobId) return;
+  const jobId = _movingJobId;
+  const folder = FOLDERS.find(f => f.id === folderId);
+  if(!folder) return;
+  const err = document.getElementById('mvj-err'); err.classList.remove('show');
+  try {
+    const { error } = await sb.from('dockets').update({
+      client_id: folder._clientId, client_name: folder.name, oneoff_name: null, oneoff_contact: null
+    }).eq('id', jobId);
+    if(error) throw error;
+    await sb.from('audit_log').insert([{ docket_id: jobId, action: 'moved to folder', performed_by: (currentDriver && currentDriver.id) || null, notes: 'Moved to '+folder.name+' folder' }]);
+    _movingJobId = null;
+    closeMoveJobModal();
+    await loadJobsFromDB();
+    showToast('Moved to '+folder.name+' folder');
+  } catch(e) {
+    err.textContent = 'Move failed: ' + e.message; err.classList.add('show');
   }
 }
 
