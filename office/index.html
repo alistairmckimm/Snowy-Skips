@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Snowy Skips — Office</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -83,6 +86,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .dc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px}
 .dc-id{font-size:10px;color:var(--mt);font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .dc-pill{font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px;background:#f0f4f8;color:var(--mc);text-transform:uppercase;letter-spacing:0.3px}
+.dc-pdf-btn{width:22px;height:22px;border-radius:6px;border:1px solid #c7e0f0;background:#eaf3fa;color:#1B6FA8;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;flex-shrink:0}
+.dc-pdf-btn:hover{background:#d9ecf8}
 .dc-client{font-size:13px;font-weight:700;color:var(--mc);margin-bottom:3px;line-height:1.2}
 .dc-site{font-size:11px;color:#555;margin-bottom:6px;line-height:1.3}
 .dc-meta{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
@@ -311,7 +316,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       </div>
       <div class="tbl-wrap">
         <table class="t" id="cl-tbl">
-          <thead><tr><th>Name</th><th>Short code</th><th>Icon</th><th>Type</th><th>Status</th><th>Created</th><th style="width:130px">Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Contact</th><th>Short code</th><th>Icon</th><th>Type</th><th>Status</th><th>Created</th><th style="width:130px">Actions</th></tr></thead>
           <tbody id="cl-body"></tbody>
         </table>
       </div>
@@ -713,7 +718,9 @@ table.t tbody tr:hover{background:#f7f9fc}
     <div class="mdl-head"><h3 id="cm-title">Add client</h3><button class="btn-x" onclick="closeClientModal()"><i class="ti ti-x"></i></button></div>
     <div class="mdl-body">
       <div class="fld"><label>Name *</label><input type="text" id="cm-name" placeholder="e.g. Acme Builders"></div>
+      <div class="fld"><label>Contact (phone or email)</label><input type="text" id="cm-contact" placeholder="e.g. 0412 345 678"></div>
       <div class="fld"><label>Short code *</label><input type="text" id="cm-code" placeholder="e.g. acme — lowercase, no spaces"></div>
+      <div id="cm-convert-note" style="display:none;background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 8px 8px 0;padding:8px 10px;font-size:11px;color:#633806;margin-bottom:10px"></div>
       <div class="fld"><label>Icon</label>
         <select id="cm-icon">
           <option value="ti-building">Building</option>
@@ -969,7 +976,7 @@ async function loadDocketsFromDB(){
     const { data, error } = await sb.from('dockets').select('*').order('created_at', { ascending:false });
     if(error) throw error;
     DOCKETS = data || [];
-    $('bdg-dockets').textContent = DOCKETS.filter(d => (d.stage||1) < 6).length;
+    $('bdg-dockets').textContent = DOCKETS.filter(d => (d.stage||1) < 6 && !d.voided).length;
     renderBoard();
   } catch(e){ console.error('loadDockets', e); showToast('Could not load dockets: '+e.message); }
 }
@@ -1026,10 +1033,18 @@ function docketCard(d){
   const driverName = driver ? driver.name : '';
   const bins = (d.bins_picked_up && d.bins_picked_up.length ? d.bins_picked_up : d.bins_delivered) || [];
   const binsLabel = bins.length ? bins.map(b=>'#'+b).join(', ') : '';
+  // A finished skip (driver-completed, stage 5 "Completion" or 6 "Invoice")
+  // gets a one-tap PDF icon right on the card — no need to open the drawer
+  // just to send the customer their docket.
+  const isCompleted = (d.stage||1) >= 5;
+  const pdfBtn = isCompleted ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();generateDocketPDF('${esc(d.id)}','client')" title="Download client PDF"><i class="ti ti-file-download"></i></button>` : '';
   return `<div class="dcard ${d.has_nc?'has-nc':''}" onclick="openDrawer('${esc(d.id)}')">
     <div class="dc-top">
       <span class="dc-id">${esc(d.id)}</span>
-      <span class="dc-pill">${esc(d.bin_type||'—')}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${pdfBtn}
+        <span class="dc-pill">${esc(d.bin_type||'—')}</span>
+      </div>
     </div>
     <div class="dc-client">${esc(clientNameOf(d))}</div>
     <div class="dc-site">${esc(d.site||'No site')}</div>
@@ -1050,6 +1065,7 @@ function docketCard(d){
 }
 
 function filterDocket(d){
+  if(d.voided) return false;
   if(_filters.client && d.client_id !== _filters.client) return false;
   if(_filters.from){
     const dd = d.date || (d.created_at && d.created_at.slice(0,10));
@@ -1223,6 +1239,8 @@ function renderDrawerActions(d){
     <div class="row">
       <button class="btn-p red" onclick="resetAllSigs('${esc(d.id)}')"><i class="ti ti-refresh"></i> Reset all signatures</button>
     </div>
+    ${d.oneoff_name ? `<div class="row"><button class="btn-p" onclick="openConvertToClientModal('${esc(d.id)}')"><i class="ti ti-user-plus"></i> Convert ${esc(d.oneoff_name)} to a client folder</button></div>` : ''}
+    ${!d.voided ? `<div class="row"><button class="btn-s" style="border-color:var(--rd);color:var(--rd);width:100%;justify-content:center" onclick="voidDocket('${esc(d.id)}')"><i class="ti ti-trash"></i> Void this docket</button></div>` : `<div class="row" style="font-size:11px;color:var(--rd)"><i class="ti ti-trash"></i> Voided${d.void_reason?': '+esc(d.void_reason):''}</div>`}
   `;
 }
 
@@ -2012,6 +2030,26 @@ async function resetAllSigs(docketId){
   } catch(e){ showToast('Reset failed: '+e.message); }
 }
 
+// Void a docket that never actually happened (contract fell through, bin
+// pulled without going through the system, entered by mistake, etc.) — it
+// disappears from the active board but the row and its history stay in the
+// database for ISO 14001 / EPA audit-trail purposes. Not a hard delete.
+async function voidDocket(docketId){
+  const d = DOCKETS.find(x => x.id === docketId); if(!d) return;
+  const reason = await askReason('Void docket', 'Removes this docket from the active board and job lists. It is NOT deleted — the record stays in the system for your compliance records.');
+  if(!reason) return;
+  try {
+    const { error } = await sb.from('dockets').update({
+      voided: true, void_reason: reason, voided_at: new Date().toISOString(), voided_by: currentUser ? currentUser.id : null
+    }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'voided', reason);
+    closeDrawer();
+    await loadDocketsFromDB();
+    showToast('Docket voided');
+  } catch(e){ showToast('Void failed: '+e.message); }
+}
+
 // ── REASON MODAL ───────────────────────────────────────────────────────────
 function askReason(title, msg){
   return new Promise(resolve => {
@@ -2039,10 +2077,11 @@ function renderClients(){
   const showArch = $('cl-showArchived').checked;
   const rows = CLIENTS.filter(c => showArch ? true : c.active);
   const body = $('cl-body');
-  if(!rows.length){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">No clients</td></tr>`; return; }
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--mt)">No clients</td></tr>`; return; }
   body.innerHTML = rows.map(c => `
     <tr>
       <td><i class="ti ${esc(c.icon||'ti-building')}" style="color:var(--or);margin-right:6px"></i>${esc(c.name)}</td>
+      <td style="color:#555">${esc(c.contact||'—')}</td>
       <td style="font-family:ui-monospace,Menlo,monospace;color:#555">${esc(c.short_code||'—')}</td>
       <td><code style="font-size:11px;color:var(--mt)">${esc(c.icon||'—')}</code></td>
       <td>${c.is_general?'<span class="pill orange">General</span>':'<span class="pill grey">Client</span>'}</td>
@@ -2057,27 +2096,50 @@ function renderClients(){
 }
 
 let _editingClientId = null;
+let _convertFromDocketId = null; // set when the modal was opened via "Convert to client folder"
 function openClientModal(id){
   _editingClientId = id || null;
+  _convertFromDocketId = null;
+  $('cm-convert-note').style.display = 'none';
   if(id){
     const c = CLIENTS.find(x=>x.id===id);
     if(!c) return;
     $('cm-title').textContent = 'Edit client';
     $('cm-name').value = c.name||'';
+    $('cm-contact').value = c.contact||'';
     $('cm-code').value = c.short_code||'';
     $('cm-icon').value = c.icon||'ti-building';
     $('cm-general').checked = !!c.is_general;
   } else {
     $('cm-title').textContent = 'Add client';
-    $('cm-name').value=''; $('cm-code').value=''; $('cm-icon').value='ti-building'; $('cm-general').checked=false;
+    $('cm-name').value=''; $('cm-contact').value=''; $('cm-code').value=''; $('cm-icon').value='ti-building'; $('cm-general').checked=false;
   }
   $('cm-err').classList.remove('show');
   $('cm-bk').classList.add('on');
 }
-function closeClientModal(){ $('cm-bk').classList.remove('on'); _editingClientId=null; }
+
+// Pre-fills the Add Client modal from a one-off General Skip Assignment
+// docket, so an office user can turn a customer who's become a regular
+// into a proper client folder without retyping their details.
+function openConvertToClientModal(docketId){
+  const d = DOCKETS.find(x => x.id === docketId);
+  if(!d || !d.oneoff_name) return;
+  openClientModal(null);
+  _convertFromDocketId = docketId;
+  $('cm-title').textContent = 'Convert to client folder';
+  $('cm-name').value = d.oneoff_name || '';
+  $('cm-contact').value = d.oneoff_contact || '';
+  $('cm-code').value = _slugify(d.oneoff_name);
+  $('cm-general').checked = false;
+  $('cm-convert-note').style.display = '';
+  $('cm-convert-note').innerHTML = '<i class="ti ti-info-circle"></i> This docket ('+esc(docketId)+') will move into the new folder. Older one-off jobs from '+esc(d.oneoff_name)+' stay under General Skip Assignment.';
+}
+
+function closeClientModal(){ $('cm-bk').classList.remove('on'); _editingClientId=null; _convertFromDocketId=null; }
 
 async function saveClient(){
   const name = $('cm-name').value.trim();
+  const contact = $('cm-contact').value.trim();
   const code = $('cm-code').value.trim().toLowerCase();
   const icon = $('cm-icon').value;
   const isGen = $('cm-general').checked;
@@ -2088,15 +2150,29 @@ async function saveClient(){
   try {
     let r;
     if(_editingClientId){
-      r = await sb.from('clients').update({ name, short_code: code, icon, is_general: isGen }).eq('id', _editingClientId);
+      r = await sb.from('clients').update({ name, contact: contact||null, short_code: code, icon, is_general: isGen }).eq('id', _editingClientId);
     } else {
-      r = await sb.from('clients').insert([{ name, short_code: code, icon, is_general: isGen, active: true }]);
+      r = await sb.from('clients').insert([{ name, contact: contact||null, short_code: code, icon, is_general: isGen, active: true }]).select();
     }
     if(r.error) throw r.error;
+    const convertingDocketId = _convertFromDocketId;
+    const newClient = (!_editingClientId && r.data && r.data[0]) ? r.data[0] : null;
     closeClientModal();
     await loadClientsFromDB();
-    renderClients();
-    showToast(_editingClientId?'Client updated':'Client added');
+    if(convertingDocketId && newClient){
+      const { error: linkErr } = await sb.from('dockets').update({
+        client_id: newClient.id, client_name: newClient.name, oneoff_name: null, oneoff_contact: null
+      }).eq('id', convertingDocketId);
+      if(linkErr){ showToast('Client created, but linking the docket failed: '+linkErr.message); }
+      else {
+        await loadDocketsFromDB();
+        if(activeDocket && activeDocket.id === convertingDocketId) refreshDrawer();
+        showToast('Converted — '+esc(newClient.name)+' now has their own folder.');
+      }
+    } else {
+      renderClients();
+      showToast(_editingClientId?'Client updated':'Client added');
+    }
   } catch(e){ err.textContent='Save failed: '+e.message; err.classList.add('show'); }
   finally { $('cm-save').disabled = false; }
 }
@@ -2393,13 +2469,15 @@ async function generateDocketPDF(docketId, copyType){
       audit = auditRows || [];
     }
 
+    // All photos for every zone are embedded — no per-zone cap — since they're
+    // now shown together as one gallery at the bottom of the report (see
+    // "Photos" section below) rather than a few thumbnails per section.
     const zonesNeeded = ['arr','pu','tip','rec'];
     const photoData = {};
     await Promise.all(zonesNeeded.map(async (z) => {
       const all = photos.filter(p => p.zone === z);
-      const inZone = all.slice(0, 4);
-      photoData[z] = { extra: all.length - inZone.length, items: [] };
-      for(const p of inZone){
+      photoData[z] = { extra: 0, items: [] };
+      for(const p of all){
         const dataUrl = await _urlToDataURL(p.publicUrl);
         if(dataUrl) photoData[z].items.push(dataUrl);
       }
@@ -2740,7 +2818,6 @@ async function generateDocketPDF(docketId, copyType){
       ],
       { colWidths: [38, 30, 26, 36, 44] }
     );
-    await drawPhotoStrip('arr', 'Waste Image at Arrival');
     drawLabelPill('Site Allocation', docket.bin_type || 'Truck');
     drawSignatureBlock('Driver Signature at Delivery / Arrival', sigs.delivery);
 
@@ -2764,7 +2841,6 @@ async function generateDocketPDF(docketId, copyType){
       ],
       { colWidths: [26, 22, 30, 26, 36, 34] }
     );
-    await drawPhotoStrip('pu', 'Waste Pickup (Loaded)');
     const pcts = docket.waste_pcts || {};
     const pctEntries = Object.entries(pcts).filter(([,v]) => v && Number(v) > 0);
     if(pctEntries.length){
@@ -2804,24 +2880,29 @@ async function generateDocketPDF(docketId, copyType){
       ],
       { colWidths: [28, 24, 50, 30, 32] }
     );
-    await drawPhotoStrip('tip', 'Disposal Facility Receipt / Tip Photos');
-    await drawPhotoStrip('rec', 'Recycling Photos');
     drawSignatureBlock('Signature upon Disposal', sigs.disposal);
 
     if(sigs.delivery || sigs.pickup || sigs.disposal){
       drawLockedNotice();
     }
 
-    drawSectionTitle('Form Attachments');
-    doc.setTextColor.apply(doc, GREY);
-    doc.setFont('helvetica','italic'); doc.setFontSize(9);
+    // All photos for this docket, grouped by the stage they were taken at,
+    // gathered into one gallery at the bottom of the report — matches the
+    // Sitemate/Dashpivot convention of a single photo appendix rather than
+    // thumbnails scattered through each section.
+    drawSectionTitle('Photos');
     const totalPhotos = photos.length;
     if(totalPhotos > 0){
-      doc.text(totalPhotos + ' photo(s) attached — see office storage for full-resolution originals.', M, cursorY + 4);
+      await drawPhotoStrip('arr', 'Waste Image at Arrival');
+      await drawPhotoStrip('pu', 'Waste Pickup (Loaded)');
+      await drawPhotoStrip('tip', 'Disposal Facility Receipt / Tip Photos');
+      await drawPhotoStrip('rec', 'Recycling Photos');
     } else {
-      doc.text('No additional file attachments.', M, cursorY + 4);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9);
+      doc.text('No photos attached to this docket.', M, cursorY + 4);
+      cursorY += 8;
     }
-    cursorY += 8;
 
     if(copyType === 'internal'){
       drawSectionTitle('Compliance — ISO 14001:2026 / NSW EPA');
