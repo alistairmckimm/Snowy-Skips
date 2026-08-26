@@ -1,1 +1,1951 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Snowy Skips — Driver App</title>
 
+<!-- Home screen shortcut / installable app support -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a2240">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Snowy Skips">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--mc:#0a2240;--or:#e8611a;--tl:#1D9E75}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f2f2f7;min-height:100vh;max-width:430px;margin:0 auto}
+.app{display:none;flex-direction:column;min-height:100vh;background:#f2f2f7}
+
+/* TOP BAR */
+.topbar{background:var(--mc);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:50}
+.tbl{display:flex;align-items:center;gap:10px}
+.tlogo{width:36px;height:36px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:3px}
+.tlogo img{width:100%;height:100%;object-fit:contain}
+.ttitle{font-size:16px;font-weight:700;color:#fff}
+.tsub{font-size:10px;color:rgba(255,255,255,0.5);margin-top:1px}
+.driver-pill{background:rgba(255,255,255,0.15);border-radius:20px;padding:5px 11px;font-size:11px;color:#fff;display:flex;align-items:center;gap:5px}
+
+/* NAV TABS */
+.navtabs{display:flex;background:var(--mc);border-top:1px solid rgba(255,255,255,0.1);position:sticky;top:56px;z-index:49}
+.ntab{flex:1;padding:9px 4px;text-align:center;font-size:10px;color:rgba(255,255,255,0.45);cursor:pointer;border-bottom:2px solid transparent}
+.ntab i{display:block;font-size:18px;margin-bottom:2px}
+.ntab.active{color:#fff;border-bottom-color:var(--or)}
+
+/* SCREENS */
+.scr{display:none;padding:0}.scr.active{display:block}
+
+/* ===== JOBS SCREEN ===== */
+.jobs-screen{padding:0}
+.folder-header{padding:14px 16px 8px;display:flex;align-items:center;justify-content:space-between}
+.folder-header h2{font-size:13px;font-weight:700;color:var(--mc)}
+.folder-header span{font-size:11px;color:#aaa}
+.search-bar{margin:0 14px 10px;display:flex;align-items:center;gap:8px;background:#fff;border-radius:11px;padding:9px 12px;border:1px solid #e0e0e0}
+.search-bar i{font-size:16px;color:#bbb;flex-shrink:0}
+.search-bar input{border:none;background:transparent;font-size:14px;color:#1a1a1a;flex:1;outline:none;font-family:inherit}
+
+/* FOLDER LIST */
+.folder-item{display:flex;align-items:center;gap:12px;padding:13px 16px;background:#fff;border-bottom:0.5px solid #f0f0f0;cursor:pointer}
+.folder-item:active{background:#f7f7f7}
+.folder-icon{width:38px;height:38px;border-radius:10px;background:#EBF4FF;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.folder-icon i{font-size:18px;color:#0C447C}
+.folder-icon.general{background:#fde8d8}
+.folder-icon.general i{color:#7d3000}
+.folder-name{font-size:14px;font-weight:500;color:#1a1a1a;flex:1}
+.folder-count{font-size:11px;color:#aaa;margin-right:4px}
+.folder-chevron{color:#bbb;font-size:14px}
+
+/* CLIENT JOB LIST */
+.client-header{background:var(--mc);padding:12px 16px;display:flex;align-items:center;gap:10px}
+.back-btn{color:#fff;background:none;border:none;cursor:pointer;font-size:16px;padding:0;display:flex;align-items:center;gap:4px;font-family:inherit}
+.client-title{font-size:15px;font-weight:700;color:#fff;flex:1}
+.new-job-btn{background:var(--or);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;font-family:inherit}
+
+.job-card{background:#fff;border-radius:14px;margin:10px 14px;padding:14px;border:1px solid #e8e8e8;cursor:pointer;position:relative}
+.job-card:active{opacity:0.85}
+.job-card.has-nc{border-left:3px solid #E24B4A}
+.job-card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+.job-site{font-size:15px;font-weight:700;color:#1a1a1a}
+.job-id{font-size:10px;color:#aaa;margin-top:2px}
+.job-stage-pill{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:600}
+.stage-order{background:#f0f0f0;color:#555}
+.stage-delivery{background:#EBF4FF;color:#0C447C}
+.stage-pickup{background:#fde8d8;color:#7d3000}
+.stage-disposal{background:#e1f5ee;color:#155724}
+.stage-complete{background:#e8f5f0;color:#155724}
+.job-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.job-tag{background:#f2f2f7;border-radius:6px;padding:3px 8px;font-size:11px;color:#555;display:flex;align-items:center;gap:3px}
+.job-tag i{font-size:11px;color:#aaa}
+.job-next{background:var(--mc);color:#fff;border:none;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;width:100%;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;margin-top:4px}
+.job-next.orange{background:var(--or)}
+.job-next.teal{background:var(--tl)}
+.job-progress{display:flex;gap:3px;margin-bottom:10px}
+.prog-seg{flex:1;height:4px;border-radius:2px;background:#f0f0f0}
+.prog-seg.done{background:var(--mc)}
+.prog-seg.active{background:var(--or)}
+
+/* ===== FORM SCREEN ===== */
+.form-screen{padding:0}
+.form-header{background:var(--mc);padding:12px 16px;display:flex;align-items:center;gap:10px}
+.form-title{font-size:14px;font-weight:700;color:#fff;flex:1}
+.form-sub{font-size:10px;color:rgba(255,255,255,0.55);margin-top:1px}
+.stepbar{display:flex;margin:12px 14px;border-radius:10px;overflow:hidden;border:1px solid #e0e0e0}
+.sseg{flex:1;text-align:center;padding:9px 2px;font-size:10px;cursor:pointer;border-right:1px solid #e0e0e0;background:#f2f2f7;color:#aaa}
+.sseg:last-child{border-right:none}
+.sseg.done{background:#d4edda;color:#155724;font-weight:600}
+.sseg.active{background:var(--mc);color:#fff;font-weight:600}
+.fw{padding:0 14px 20px}
+.sc{background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid #e8e8e8}
+.stitle{font-size:10px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.stitle i{font-size:13px}
+.field{margin-bottom:10px}.field:last-child{margin-bottom:0}
+label{font-size:11px;color:#666;margin-bottom:3px;display:block}
+.val-d{font-size:15px;font-weight:500;color:#1a1a1a;padding:10px 12px;background:#f7f7f7;border-radius:9px;border:1px solid #e8e8e8}
+.val-d.orange{background:#fde8d8;color:#7d3000;border-color:#f5c4a0}
+input,select,textarea{width:100%;border-radius:9px;border:1px solid #d0d0d0;background:#fff;color:#1a1a1a;font-size:14px;padding:10px 12px;font-family:inherit;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--or);box-shadow:0 0 0 3px rgba(232,97,26,0.12)}
+textarea{resize:none;height:60px}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* BIN PICKER */
+.bin-picker{border:1px solid #d0d0d0;border-radius:10px;overflow:hidden}
+.bsrow{padding:8px 10px;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;gap:6px;background:#f7f7f7}
+.bsrow input{border:none;background:transparent;font-size:13px;padding:0;outline:none;font-family:inherit}
+.bgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:7px;max-height:145px;overflow-y:auto;background:#fff}
+.bb{border:1px solid #d0d0d0;border-radius:7px;padding:7px 2px;font-size:11px;font-weight:500;text-align:center;cursor:pointer;background:#fff;color:#1a1a1a;font-family:inherit}
+.bb.sel{background:var(--mc);color:#fff;border-color:var(--mc)}
+.btags{display:flex;flex-wrap:wrap;gap:4px;padding:7px;background:#f7f7f7;border-top:1px solid #e8e8e8;min-height:34px}
+.btag{display:inline-flex;align-items:center;gap:3px;background:var(--mc);color:#fff;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:500}
+.btag button{background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:12px;padding:0;line-height:1}
+.bhint{font-size:9px;color:#aaa;padding:3px 8px;border-top:1px solid #e8e8e8;background:#f7f7f7}
+
+/* PHOTOS */
+.pzone{border:2px dashed #d0d0d0;border-radius:10px;padding:14px;text-align:center;cursor:pointer;background:#f7f7f7}
+.pzone i{font-size:24px;color:#ccc;display:block;margin-bottom:4px}
+.pzone p{font-size:11px;color:#aaa}
+.pzone-row{display:flex;gap:8px}
+.pzone-row .pzone{flex:1;padding:10px}
+.pzone-row .pzone i{font-size:19px;margin-bottom:2px}
+.pslot-btns{display:flex;gap:8px;margin-top:2px}
+.pslot-btn{width:28px;height:28px;border-radius:50%;border:1px solid #d7d7d7;background:#fff;color:#999;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer}
+.pslot-btn:active{background:#eee}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.pthumb{border-radius:9px;aspect-ratio:1;overflow:hidden;position:relative;background:#f0f0f0}
+.pthumb img{width:100%;height:100%;object-fit:cover}
+.pthumb .rm{position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0}
+.photo-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.pslot{border:2px dashed #d0d0d0;border-radius:10px;overflow:hidden;cursor:pointer;background:#f7f7f7;min-height:105px;display:flex;flex-direction:column}
+.pslot.has-photo{border-style:solid;border-color:var(--tl)}
+.pslot-lbl{font-size:9px;font-weight:600;color:#666;padding:6px 7px 2px;display:flex;align-items:center;gap:3px;flex-shrink:0}
+.pslot-lbl i{font-size:11px;color:var(--or)}
+.pph{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;gap:3px}
+.pph i{font-size:22px;color:#ccc}
+.pph p{font-size:9px;color:#aaa;text-align:center;line-height:1.3}
+.ppreview{flex:1;position:relative;min-height:70px}
+.ppreview img{width:100%;height:100%;object-fit:cover;display:block}
+.pstamp{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.62);padding:2px 4px}
+.pstamp span{display:block;font-size:6.5px;color:#f5c842;font-family:monospace;line-height:1.35}
+.prm{position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:17px;height:17px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0}
+input[type="file"]{display:none}
+
+/* WEIGHT */
+.wb-block{background:#f7f7f7;border-radius:10px;padding:11px;border:1px solid #e8e8e8;margin-top:8px}
+.wb-row{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;margin-top:6px}
+.wb-card{background:#fff;border-radius:9px;padding:10px;border:1px solid #e8e8e8;text-align:center}
+.wb-card.res{border-color:var(--tl);background:#e8f5f0}
+.wb-v{font-size:17px;font-weight:700;color:#1a1a1a}
+.wb-card.res .wb-v{color:var(--tl)}
+.wb-u{font-size:9px;color:#aaa;margin-top:2px}
+.cbm-note{background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 8px 8px 0;padding:9px 11px;font-size:10px;color:#633806;margin-top:8px;line-height:1.5}
+
+/* PCT */
+.pct-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pct-f{display:flex;align-items:center;justify-content:space-between;background:#f7f7f7;border-radius:7px;padding:7px 9px}
+.pct-f label{font-size:11px;color:#666;margin:0}
+.pct-f input{width:52px;text-align:right;font-size:13px;font-weight:600;padding:4px 6px;border:1px solid #d0d0d0;border-radius:6px;background:#fff}
+.pct-total{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:7px 9px;border-radius:7px;background:#f7f7f7}
+.venm-alert{background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 7px 7px 0;padding:7px 10px;font-size:10px;color:#633806;margin-top:6px}
+
+/* SIG */
+.sigbox{border:1px solid #d0d0d0;border-radius:11px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;background:#f7f7f7}
+.sigbox.signed{background:#e8f5f0;border-color:#a3d7b0}
+.sigbox i.sico{font-size:24px;color:#ccc}
+.sigbox.signed i.sico{color:var(--tl)}
+.sbt p{font-size:12px;color:#666;margin:0;font-weight:500}
+.sigbox.signed .sbt p{color:#155724}
+.sbt small{font-size:10px;color:#aaa}
+
+.btn-p{width:100%;background:var(--mc);color:#fff;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-p.orange{background:var(--or)}
+.btn-p.teal{background:var(--tl)}
+.btn-s{background:transparent;color:var(--mc);border:2px solid var(--mc);border-radius:11px;padding:12px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.hidden{display:none}
+canvas{display:none}
+.instr{background:#EBF4FF;border-left:3px solid #378ADD;border-radius:0 8px 8px 0;padding:9px 11px;font-size:10px;color:#0C447C;margin-bottom:10px;line-height:1.5}
+
+/* DRIVER PROFILE SYSTEM */
+.dp-overlay{position:fixed;inset:0;background:#f2f2f7;z-index:200;overflow-y:auto;display:none;max-width:430px;margin:0 auto;padding:0}
+.dp-overlay.active{display:block}
+.dp-header{background:var(--mc);padding:24px 20px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+.dp-header .tlogo{width:54px;height:54px}
+.dp-header h2{font-size:18px;font-weight:700;color:#fff;margin-top:4px}
+.dp-header p{font-size:12px;color:rgba(255,255,255,0.7);line-height:1.4;max-width:300px}
+.dp-body{padding:18px 16px 24px}
+.dp-card{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid #e8e8e8}
+.dp-err{color:#A32D2D;font-size:11px;margin-top:4px;display:none}
+.dp-err.show{display:block}
+.sigpad-wrap{position:relative;border:1px solid #d0d0d0;border-radius:11px;background:#fff;overflow:hidden}
+.sigpad{display:block;width:100%;height:140px;background:#fff;touch-action:none;cursor:crosshair}
+.sigpad-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#bbb;pointer-events:none;font-style:italic}
+.sigpad-placeholder.gone{display:none}
+.sig-actions{display:flex;gap:8px;margin-top:8px}
+
+/* DRIVER PICKER MODAL */
+.dpk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:180;display:none}
+.dpk-backdrop.active{display:block}
+.dpk-sheet{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:430px;background:#fff;border-radius:18px 18px 0 0;z-index:190;padding:14px 14px 22px;display:none;box-shadow:0 -4px 18px rgba(0,0,0,0.18)}
+.dpk-sheet.active{display:block}
+.dpk-grab{width:36px;height:4px;border-radius:2px;background:#ddd;margin:0 auto 10px}
+.dpk-title{font-size:12px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.4px;text-align:center;margin-bottom:10px}
+.dpk-item{display:flex;align-items:center;gap:11px;padding:12px;border-radius:11px;cursor:pointer;border:1px solid #eee;margin-bottom:7px;background:#fafafa}
+.dpk-item.current{background:#e8f5f0;border-color:#a3d7b0}
+.dpk-item:active{background:#f0f0f0}
+.dpk-avatar{width:38px;height:38px;border-radius:50%;background:var(--mc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.dpk-name{font-size:14px;font-weight:600;color:#1a1a1a;flex:1}
+.dpk-name small{display:block;font-size:10px;color:#aaa;font-weight:400;margin-top:1px}
+.dpk-check{color:var(--tl);font-size:18px}
+.dpk-add{margin-top:6px;width:100%;padding:12px;border:2px dashed #d0d0d0;border-radius:11px;background:#fff;font-size:13px;font-weight:600;color:var(--mc);cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
+
+/* SIGBOX (signed state) */
+.sigbox.signed{flex-direction:column;align-items:stretch;cursor:default}
+.sigbox.signed .sig-img-wrap{background:#fff;border:1px solid #cfe6d5;border-radius:8px;padding:6px;display:flex;align-items:center;justify-content:center;min-height:60px;max-height:96px}
+.sigbox.signed .sig-img-wrap img{max-height:84px;max-width:100%;object-fit:contain;display:block}
+.sigbox.signed .sig-img-wrap .no-img{font-size:10px;color:#aaa;font-style:italic}
+.sigbox.signed .sig-meta{display:flex;align-items:center;gap:8px;margin-top:6px}
+.sigbox.signed .sig-meta i.sico{font-size:18px}
+.sigbox.signed .sig-meta .sbt{flex:1}
+.sigbox.signed .sig-meta .sbt p{font-size:12px;font-weight:600;color:#155724;margin:0}
+.sigbox.signed .sig-meta .sbt small{font-size:10px;color:#5a8c6a}
+.sig-clear-btn{background:transparent;border:1px solid #cfe6d5;color:#155724;border-radius:7px;padding:5px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:3px}
+
+/* LOCKED STEP BANNER */
+.lock-banner{background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 9px 9px 0;padding:9px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:11px;color:#633806}
+.lock-banner i{font-size:14px}
+.lock-banner .reopen{margin-left:auto;background:transparent;border:none;color:#7d3000;font-size:10px;font-weight:600;cursor:pointer;text-decoration:underline;font-family:inherit}
+.locked-fields input, .locked-fields select, .locked-fields textarea{background:#f0f0f0;color:#777}
+
+/* TOAST */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--mc);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:500;z-index:220;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.18s;pointer-events:none;max-width:90%;text-align:center}
+.toast.show{opacity:1}
+
+/* SIGNOFF ROW IN JOB CARD */
+.signoff-row{font-size:10px;color:#999;margin-top:4px;margin-bottom:8px;line-height:1.4}
+
+/* INLINE ALERT */
+.inline-alert{background:#fde2e2;border-left:3px solid #E24B4A;border-radius:0 8px 8px 0;padding:9px 11px;font-size:11px;color:#8a1f1f;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.inline-alert i{font-size:14px}
+
+/* LOGIN TABS */
+.login-tab{flex:1;background:#fff;border:none;padding:12px 0;font-size:13px;font-weight:600;color:#888;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent}
+.login-tab.active{color:var(--mc);border-bottom-color:var(--or);background:#fafafa}
+.dpk-sheet button.btn-s{background:transparent;color:var(--mc);border:2px solid var(--mc);border-radius:11px;padding:12px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+
+/* CLIENT MANAGEMENT (add/edit/archive folders) */
+.fh-add-btn{background:var(--or);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;cursor:pointer;font-family:inherit}
+.folder-edit-btn{width:26px;height:26px;border-radius:8px;border:1px solid #e0e0e0;background:#f7f7f7;color:#888;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit}
+.folder-edit-btn:active{background:#eee}
+.chk{display:flex;align-items:center;gap:6px;font-size:12px;color:#666;cursor:pointer;margin:8px 0 2px}
+.chk input{width:auto}
+.cmd-archive-btn{width:100%;background:transparent;color:#A32D2D;border:2px solid #f0c4c4;border-radius:11px;padding:12px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px}
+.btn-p.red{background:#A32D2D}
+.void-btn{width:26px;height:26px;border-radius:8px;border:1px solid #f0c4c4;background:#fdf0f0;color:#A32D2D;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit}
+.void-btn:active{background:#fbe0e0}
+.move-btn{width:26px;height:26px;border-radius:8px;border:1px solid #c7e0f0;background:#eaf3fa;color:#1B6FA8;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit}
+.move-btn:active{background:#d9ecf8}
+.mvj-row{display:flex;align-items:center;gap:10px;padding:12px 10px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;color:#222}
+.mvj-row:active{background:#f2f2f7}
+.mvj-row i{font-size:16px;color:#0a2240;width:18px;text-align:center}
+.mvj-row.add-new{color:var(--or)}
+.mvj-row.add-new i{color:var(--or)}
+.mvj-empty{font-size:13px;color:#888;padding:10px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="tbl">
+    <div class="tlogo"><img src="logo.png" alt="Snowy Skips"></div>
+    <div><div class="ttitle">Snowy Skips</div><div class="tsub">McKimm Civil Pty Ltd <span id="app-build-tag" style="opacity:0.6"></span></div></div>
+  </div>
+  <div class="driver-pill" id="driver-pill" onclick="openDriverPicker()" style="cursor:pointer"><i class="ti ti-user" style="font-size:12px"></i><span id="driver-name"></span><i class="ti ti-chevron-down" style="font-size:12px;opacity:0.7"></i></div>
+</div>
+
+<!-- NAV TABS -->
+<div class="navtabs">
+  <div class="ntab active" onclick="showTab('jobs')" id="tab-jobs"><i class="ti ti-folder"></i>My jobs</div>
+  <div class="ntab" onclick="showTab('form')" id="tab-form"><i class="ti ti-clipboard-plus"></i>New docket</div>
+  <div class="ntab" onclick="showTab('done')" id="tab-done"><i class="ti ti-circle-check"></i>Submitted</div>
+</div>
+
+<!-- ===== JOBS TAB ===== -->
+<div class="scr active" id="scr-jobs">
+  <div id="view-folders">
+    <div class="folder-header"><h2>Folders</h2><div style="display:flex;align-items:center;gap:8px"><span id="total-jobs-label">0 active jobs</span><button class="fh-add-btn" onclick="openClientModal()"><i class="ti ti-plus"></i> Client</button></div></div>
+    <div class="search-bar">
+      <i class="ti ti-search"></i>
+      <input type="text" placeholder="Search jobs, bins, clients..." oninput="searchJobs(this.value)" id="search-input">
+    </div>
+    <div id="folder-list"></div>
+  </div>
+  <div id="view-client" style="display:none">
+    <div class="client-header">
+      <button class="back-btn" onclick="backToFolders()"><i class="ti ti-arrow-left"></i> Back</button>
+      <div>
+        <div class="client-title" id="client-title">Client</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.5)" id="client-subtitle"></div>
+      </div>
+      <button class="new-job-btn" onclick="startNewJobForClient()"><i class="ti ti-plus"></i> New docket</button>
+    </div>
+    <div id="client-jobs-list" style="padding-bottom:20px"></div>
+  </div>
+  <div id="view-search" style="display:none">
+    <div style="padding:12px 16px 4px;display:flex;align-items:center;gap:8px">
+      <button onclick="clearSearch()" style="background:none;border:none;cursor:pointer;color:var(--mc);font-size:13px;font-weight:600;font-family:inherit;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-left" style="font-size:14px"></i> Clear</button>
+      <span style="font-size:13px;color:#aaa" id="search-result-label"></span>
+    </div>
+    <div id="search-results" style="padding-bottom:20px"></div>
+  </div>
+</div>
+
+<!-- ===== FORM TAB ===== -->
+<div class="scr" id="scr-form">
+  <div class="form-screen">
+    <div class="form-header">
+      <button class="back-btn" onclick="cancelForm()" id="form-back-btn"><i class="ti ti-arrow-left"></i></button>
+      <div>
+        <div class="form-title" id="form-title">New docket</div>
+        <div class="form-sub" id="form-sub">Step 1 of 4</div>
+      </div>
+    </div>
+    <div class="stepbar">
+      <div class="sseg active" id="sg1" onclick="goStep(1)">Order</div>
+      <div class="sseg" id="sg2" onclick="goStep(2)">Delivery</div>
+      <div class="sseg" id="sg3" onclick="goStep(3)">Pickup</div>
+      <div class="sseg" id="sg4" onclick="goStep(4)">Disposal</div>
+    </div>
+    <div class="fw">
+
+      <!-- STEP 1 -->
+      <div id="st1">
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-folder"></i>Client &amp; job details</div>
+          <div class="field"><label>Client / folder</label>
+            <select id="f-client" onchange="onClientChange()">
+              <option value="">Select client...</option>
+            </select>
+          </div>
+          <div id="oneoff-block" style="display:none;background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:10px">
+            <div style="font-size:9px;font-weight:700;color:#633806;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px"><i class="ti ti-user-plus" style="font-size:11px"></i> One-off client details</div>
+            <div class="field"><label>Client name</label><input type="text" id="f-oneoff-name" placeholder="e.g. Sarah Johnson"></div>
+            <div class="field" style="margin-bottom:0"><label>Contact (phone or email)</label><input type="text" id="f-oneoff-contact" placeholder="e.g. 0412 345 678"></div>
+          </div>
+          <div class="field"><label>Site / location</label><input type="text" id="f-location" placeholder="e.g. The Village, Thredbo"></div>
+          <div class="field"><label>Date</label><input type="date" id="f-date"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-trash"></i>Bin &amp; waste type</div>
+          <div class="r2">
+            <div class="field"><label>Bin type</label>
+              <select id="f-bintype">
+                <option>Skip Bin</option><option>Concrete Washout</option><option>IBC</option>
+                <option>Truck Body</option><option>Bulka Bag</option><option>Trailer 8x5</option>
+              </select>
+            </div>
+            <div class="field"><label>Waste type</label>
+              <select id="f-wastetype">
+                <option>Construction</option><option>Concrete</option><option>Green Waste</option>
+                <option>Demolition (Building)</option><option>Steel/Metal</option><option>Timber</option>
+                <option>Domestic</option><option>Mixed</option><option>VENM</option><option>Hazardous</option>
+              </select>
+            </div>
+          </div>
+          <div class="field"><label>Comments (optional)</label><textarea id="f-comments" placeholder="e.g. Via Tristan, access via side gate"></textarea></div>
+        </div>
+        <button class="btn-p" onclick="goStep(2)">Next: Delivery <i class="ti ti-arrow-right"></i></button>
+        <button class="btn-p teal" id="btn-save-order" style="margin-top:8px" onclick="saveAndExit('order')"><i class="ti ti-device-floppy"></i> <span id="btn-save-order-label">Save &amp; exit (order received)</span></button>
+      </div>
+
+      <!-- STEP 2 -->
+      <div id="st2" class="hidden">
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-truck"></i>Truck arrival</div>
+          <div class="r2">
+            <div class="field"><label>Arrival date</label><input type="date" id="f-arr-date"></div>
+            <div class="field"><label>Arrival time</label><input type="time" id="f-arr-time"></div>
+          </div>
+          <div class="field"><label>Vehicle registration</label><input type="text" id="f-rego" placeholder="e.g. XO 33 YP"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-box-multiple"></i>Bins delivered
+            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Bins 1–100 · tap to select</span>
+          </div>
+          <div id="bpd"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-camera"></i>Arrival photo
+            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Auto-stamped</span>
+          </div>
+          <div class="pzone-row">
+            <label class="pzone" for="ph-arr-cam"><i class="ti ti-camera"></i><p>Take photo</p></label>
+            <label class="pzone" for="ph-arr-gal"><i class="ti ti-photo"></i><p>Choose from gallery</p></label>
+          </div>
+          <input type="file" id="ph-arr-cam" accept="image/*" capture="environment" multiple onchange="addPhotos('arr',this)">
+          <input type="file" id="ph-arr-gal" accept="image/*" multiple onchange="addPhotos('arr',this)">
+          <div class="pgrid" id="pg-arr"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-writing"></i>Sign delivery</div>
+          <div class="sigbox" id="sig-del" onclick="doSign('sig-del')"><i class="ti ti-signature sico"></i><div class="sbt"><p>Tap to sign</p><small>Confirms bin delivered to site</small></div></div>
+        </div>
+        <div style="display:flex;gap:8px"><button class="btn-s" onclick="goStep(1)">Back</button><button class="btn-p" onclick="goStep(3)" style="flex:1">Next: Pickup <i class="ti ti-arrow-right"></i></button></div>
+        <button class="btn-p teal" id="btn-save-delivery" style="margin-top:8px" onclick="saveAndExit('delivery')"><i class="ti ti-device-floppy"></i> <span id="btn-save-delivery-label">Save &amp; exit (delivery done)</span></button>
+      </div>
+
+      <!-- STEP 3 -->
+      <div id="st3" class="hidden">
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-package-export"></i>Waste pickup</div>
+          <div class="r2">
+            <div class="field"><label>Pickup date</label><input type="date" id="f-pu-date"></div>
+            <div class="field"><label>Pickup time</label><input type="time" id="f-pu-time"></div>
+          </div>
+          <div class="field"><label>Vehicle registration</label><input type="text" id="f-pu-rego" placeholder="e.g. XO 33 YP"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-box-multiple"></i>Bins picked up
+            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Bins 1–100 · tap to select</span>
+          </div>
+          <div id="bpp"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-percentage"></i>Waste breakdown (must total 100%)</div>
+          <div class="pct-row">
+            <div class="pct-f"><label>Construction %</label><input type="number" id="pc" value="0" min="0" max="100" onchange="updPct()"></div>
+            <div class="pct-f"><label>Concrete %</label><input type="number" id="pco" value="0" min="0" max="100" onchange="updPct()"></div>
+            <div class="pct-f"><label>Demolition %</label><input type="number" id="pd" value="0" min="0" max="100" onchange="updPct()"></div>
+            <div class="pct-f"><label>Green Waste %</label><input type="number" id="pg2" value="0" min="0" max="100" onchange="updPct()"></div>
+            <div class="pct-f"><label>Steel/Metal %</label><input type="number" id="ps" value="0" min="0" max="100" onchange="updPct()"></div>
+            <div class="pct-f"><label>VENM %</label><input type="number" id="pv" value="0" min="0" max="100" onchange="updPct()"></div>
+          </div>
+          <div class="pct-total"><span style="font-size:11px;color:#666">Total</span><span style="font-size:14px;font-weight:700;color:#155724" id="pt">0%</span></div>
+          <div class="venm-alert hidden" id="va"><i class="ti ti-alert-triangle"></i> VENM waste — office will be notified automatically.</div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-camera"></i>Pickup photo (loaded)
+            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Auto-stamped</span>
+          </div>
+          <div class="pzone-row">
+            <label class="pzone" for="ph-pu-cam"><i class="ti ti-camera"></i><p>Take photo</p></label>
+            <label class="pzone" for="ph-pu-gal"><i class="ti ti-photo"></i><p>Choose from gallery</p></label>
+          </div>
+          <input type="file" id="ph-pu-cam" accept="image/*" capture="environment" multiple onchange="addPhotos('pu',this)">
+          <input type="file" id="ph-pu-gal" accept="image/*" multiple onchange="addPhotos('pu',this)">
+          <div class="pgrid" id="pg-pu"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-writing"></i>Sign pickup</div>
+          <div class="sigbox" id="sig-pu" onclick="doSign('sig-pu')"><i class="ti ti-signature sico"></i><div class="sbt"><p>Tap to sign</p><small>Confirms waste loaded for disposal</small></div></div>
+        </div>
+        <div style="display:flex;gap:8px"><button class="btn-s" onclick="goStep(2)">Back</button><button class="btn-p" onclick="goStep(4)" style="flex:1">Next: Disposal <i class="ti ti-arrow-right"></i></button></div>
+        <button class="btn-p teal" id="btn-save-pickup" style="margin-top:8px" onclick="saveAndExit('pickup')"><i class="ti ti-device-floppy"></i> <span id="btn-save-pickup-label">Save &amp; exit (pickup done)</span></button>
+      </div>
+
+      <!-- STEP 4 -->
+      <div id="st4" class="hidden">
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-building-warehouse"></i>Disposal</div>
+          <div class="r2">
+            <div class="field"><label>Disposal date</label><input type="date" id="f-dis-date"></div>
+            <div class="field"><label>Disposal time</label><input type="time" id="f-dis-time"></div>
+          </div>
+          <div class="field"><label>Disposal facility</label>
+            <select id="f-facility" onchange="updR()">
+              <option value="">Select facility...</option>
+              <option>Cooma Landfill</option><option>McKimm Depot</option><option>Bombala Landfill</option>
+              <option>Jindabyne Landfill</option><option>CWT - Bega Valley</option>
+              <option>Albury Landfill</option><option>Canberra Mugga Lane</option>
+            </select>
+          </div>
+          <div class="wb-block">
+            <div style="font-size:9px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Net weight from weighbridge receipt</div>
+            <div class="field" style="margin-bottom:6px"><label>Enter weight in tonnes</label>
+              <input type="number" id="fw" step="0.001" placeholder="e.g. 0.580" oninput="updR()">
+            </div>
+            <div class="wb-row">
+              <div class="wb-card"><div class="wb-v" id="wt">—</div><div class="wb-u">Tonnes</div></div>
+              <div style="text-align:center;color:#bbb;font-size:18px"><i class="ti ti-arrow-right"></i></div>
+              <div class="wb-card res"><div class="wb-v" id="wkg">—</div><div class="wb-u">Kilograms</div></div>
+            </div>
+          </div>
+          <div class="cbm-note"><i class="ti ti-info-circle"></i> Cubic metres — assess the bin yourself. Cannot be calculated from weight.</div>
+          <div class="field" style="margin-top:8px"><label>Cubic metres (m³) — your estimate</label>
+            <input type="number" id="fcbm" step="0.1" placeholder="e.g. 2.5" oninput="updR()">
+          </div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-camera"></i>Disposal photos
+            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Both required · Auto-stamped</span>
+          </div>
+          <div class="photo-pair">
+            <div class="pslot" id="slot-tip">
+              <div class="pslot-lbl"><i class="ti ti-truck-unloading"></i>Tipped waste</div>
+              <div class="pph" id="pp-tip"><i class="ti ti-photo-plus"></i><p>Unloaded waste at facility</p>
+                <div class="pslot-btns">
+                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-tip-cam').click()" title="Take photo"><i class="ti ti-camera"></i></button>
+                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-tip-gal').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button>
+                </div>
+              </div>
+            </div>
+            <input type="file" id="ph-tip-cam" accept="image/*" capture="environment" onchange="hsp('tip',this)">
+            <input type="file" id="ph-tip-gal" accept="image/*" onchange="hsp('tip',this)">
+            <div class="pslot" id="slot-rec">
+              <div class="pslot-lbl"><i class="ti ti-receipt"></i>Receipt</div>
+              <div class="pph" id="pp-rec"><i class="ti ti-photo-plus"></i><p>Weighbridge docket</p>
+                <div class="pslot-btns">
+                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-rec-cam').click()" title="Take photo"><i class="ti ti-camera"></i></button>
+                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-rec-gal').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button>
+                </div>
+              </div>
+            </div>
+            <input type="file" id="ph-rec-cam" accept="image/*" capture="environment" onchange="hsp('rec',this)">
+            <input type="file" id="ph-rec-gal" accept="image/*" onchange="hsp('rec',this)">
+          </div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-writing"></i>Sign disposal</div>
+          <div class="sigbox" id="sig-dis" onclick="doSign('sig-dis')"><i class="ti ti-signature sico"></i><div class="sbt"><p>Tap to sign</p><small>Confirms waste disposed at facility</small></div></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-s" onclick="goStep(3)">Back</button>
+          <button class="btn-p teal" id="btn-save-disposal" onclick="saveAndExit('disposal')" style="flex:1"><i class="ti ti-check"></i> <span id="btn-save-disposal-label">Save &amp; exit (disposal done)</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DONE TAB ===== -->
+<div class="scr" id="scr-done">
+  <div style="padding:14px 16px 6px;font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.4px">Submitted dockets</div>
+  <div id="done-list" style="padding:0 14px 20px">
+    <div style="text-align:center;padding:40px;color:#bbb"><i class="ti ti-inbox" style="font-size:36px;display:block;margin-bottom:8px"></i>No submitted dockets yet</div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<!-- ===== LOGIN OVERLAY ===== -->
+<div class="dp-overlay active" id="login-overlay">
+  <div class="dp-header">
+    <div class="tlogo"><i class="ti ti-snowflake" style="font-size:28px;color:#0a2240"></i></div>
+    <h2 id="login-title">Snowy Skips Driver</h2>
+    <p id="login-subtitle">Sign in to continue</p>
+    <p id="login-build-tag" style="font-size:11px;opacity:0.55;margin-top:2px"></p>
+  </div>
+  <div class="dp-body">
+    <div class="dp-card" style="display:flex;gap:0;padding:0;overflow:hidden;border-radius:11px;margin-bottom:14px">
+      <button id="login-tab-signin" class="login-tab active" onclick="switchLoginTab('signin')">Sign in</button>
+      <button id="login-tab-register" class="login-tab" onclick="switchLoginTab('register')">Register</button>
+    </div>
+
+    <!-- SIGN IN -->
+    <div id="login-pane-signin">
+      <div class="dp-card">
+        <div class="field"><label>Email</label>
+          <input type="email" id="li-email" placeholder="you@example.com" autocomplete="username">
+        </div>
+        <div class="field" style="margin-bottom:0"><label>Password</label>
+          <input type="password" id="li-password" placeholder="Your password" autocomplete="current-password">
+        </div>
+        <div class="dp-err" id="li-err">Sign in failed.</div>
+      </div>
+      <button class="btn-p teal" onclick="doSignIn()"><i class="ti ti-login"></i> <span id="li-btn-label">Sign in</span></button>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="login-pane-register" style="display:none">
+      <div class="dp-card">
+        <div class="field"><label>Email <span style="color:#A32D2D">*</span></label>
+          <input type="email" id="rg-email" placeholder="you@example.com" autocomplete="username">
+        </div>
+        <div class="field"><label>Password <span style="color:#A32D2D">*</span> <small style="color:#aaa">(min. 6 characters)</small></label>
+          <input type="password" id="rg-password" placeholder="Choose a password" autocomplete="new-password">
+        </div>
+        <div class="field"><label>Full name <span style="color:#A32D2D">*</span></label>
+          <input type="text" id="rg-name" placeholder="e.g. Billy Williams" autocomplete="name">
+        </div>
+        <div class="field" style="margin-bottom:0"><label>Phone (optional)</label>
+          <input type="tel" id="rg-phone" placeholder="e.g. 0412 345 678">
+        </div>
+        <div class="dp-err" id="rg-err">Please fill all required fields.</div>
+      </div>
+      <div class="dp-card">
+        <label style="margin-bottom:6px;display:block">Your signature <span style="color:#A32D2D">*</span></label>
+        <div style="font-size:10px;color:#aaa;margin-bottom:8px">Sign once below &mdash; this will be stamped onto every docket you sign off.</div>
+        <div class="sigpad-wrap">
+          <canvas class="sigpad" id="dp-sigpad" width="320" height="140"></canvas>
+          <div class="sigpad-placeholder" id="dp-sigpad-ph">Sign here</div>
+        </div>
+        <div class="dp-err" id="rg-err-sig">Please draw your signature.</div>
+        <div class="sig-actions">
+          <button class="btn-s" onclick="clearSigPad()" style="flex:1"><i class="ti ti-eraser"></i> Clear</button>
+        </div>
+      </div>
+      <button class="btn-p teal" onclick="doRegister()"><i class="ti ti-user-check"></i> <span id="rg-btn-label">Create profile</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DRIVER PROFILE SETUP OVERLAY ===== -->
+
+
+<!-- ===== DRIVER ACCOUNT BOTTOM SHEET ===== -->
+<div class="dpk-backdrop" id="dpk-backdrop" onclick="closeDriverPicker()"></div>
+<div class="dpk-sheet" id="dpk-sheet">
+  <div class="dpk-grab"></div>
+  <div class="dpk-title">Account</div>
+  <div id="dpk-current" style="text-align:center;padding:10px 0 14px">
+    <div style="font-size:11px;color:#aaa;margin-bottom:4px">Signed in as</div>
+    <div id="dpk-current-name" style="font-size:16px;font-weight:700;color:#1a1a1a"></div>
+    <div id="dpk-current-email" style="font-size:11px;color:#aaa;margin-top:2px"></div>
+  </div>
+  <button class="btn-s" onclick="doSignOut()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-logout"></i> Sign out</button>
+</div>
+
+<!-- ===== CLIENT MODAL (add/edit/archive folder) ===== -->
+<div class="dpk-backdrop" id="cmd-backdrop" onclick="closeClientModal()"></div>
+<div class="dpk-sheet" id="cmd-sheet">
+  <div class="dpk-grab"></div>
+  <div class="dpk-title" id="cmd-title">Add client</div>
+  <div class="dp-card">
+    <div class="field"><label>Client name *</label><input type="text" id="cmd-name" placeholder="e.g. Acme Builders"></div>
+    <div class="field"><label>Short code *</label><input type="text" id="cmd-code" placeholder="e.g. acme — lowercase, no spaces"></div>
+    <div class="field">
+      <label>Icon</label>
+      <select id="cmd-icon">
+        <option value="ti-building">Building</option>
+        <option value="ti-building-skyscraper">Skyscraper</option>
+        <option value="ti-building-community">Community</option>
+        <option value="ti-warehouse">Warehouse</option>
+        <option value="ti-home">Home</option>
+        <option value="ti-home-2">Home 2</option>
+        <option value="ti-crane">Crane</option>
+        <option value="ti-briefcase">Briefcase</option>
+        <option value="ti-user">Person</option>
+        <option value="ti-bed">Hotel</option>
+        <option value="ti-tree">Tree</option>
+        <option value="ti-mountain">Mountain</option>
+        <option value="ti-folder-open">Folder</option>
+        <option value="ti-ski-jumping">Ski</option>
+      </select>
+    </div>
+    <label class="chk"><input type="checkbox" id="cmd-general"> Mark as the General Skip Assignment folder</label>
+    <div class="dp-err" id="cmd-err"></div>
+  </div>
+  <button class="cmd-archive-btn" id="cmd-archive-btn" style="display:none" onclick="archiveClientFromModal()"><i class="ti ti-archive"></i> Archive client</button>
+  <div class="sig-actions">
+    <button class="btn-s" style="flex:1" onclick="closeClientModal()">Cancel</button>
+    <button class="btn-p teal" style="flex:1;margin-top:0" onclick="saveClientModal()"><i class="ti ti-check"></i> <span id="cmd-save-label">Save</span></button>
+  </div>
+</div>
+
+<!-- ===== VOID JOB MODAL ===== -->
+<div class="dpk-backdrop" id="vjm-backdrop" onclick="closeVoidJobModal()"></div>
+<div class="dpk-sheet" id="vjm-sheet">
+  <div class="dpk-grab"></div>
+  <div class="dpk-title">Void job</div>
+  <div class="dp-card">
+    <p style="font-size:12px;color:#666;margin-bottom:10px;line-height:1.4">Removes this job from your list and the office board — for a contract that fell through, a bin taken away without going through the system, or one entered by mistake. It's not deleted; the record stays for compliance.</p>
+    <div class="field"><label>Reason *</label><textarea id="vjm-reason" placeholder="e.g. Contract cancelled, bin removed without a job..."></textarea></div>
+    <div class="dp-err" id="vjm-err"></div>
+  </div>
+  <div class="sig-actions">
+    <button class="btn-s" style="flex:1" onclick="closeVoidJobModal()">Cancel</button>
+    <button class="btn-p red" style="flex:1;margin-top:0" onclick="confirmVoidJob()"><i class="ti ti-trash"></i> Void job</button>
+  </div>
+</div>
+
+<!-- ===== MOVE JOB TO CLIENT FOLDER MODAL ===== -->
+<div class="dpk-backdrop" id="mvj-backdrop" onclick="closeMoveJobModal()"></div>
+<div class="dpk-sheet" id="mvj-sheet">
+  <div class="dpk-grab"></div>
+  <div class="dpk-title">Move to client folder</div>
+  <div class="dp-card">
+    <p style="font-size:12px;color:#666;margin-bottom:10px;line-height:1.4">Moves this one-off job out of General Skip Assignment and into a client folder — pick an existing client, or add a new one.</p>
+    <div class="dp-err" id="mvj-err"></div>
+    <div id="mvj-list"></div>
+  </div>
+  <div class="sig-actions">
+    <button class="btn-s" style="flex:1" onclick="closeMoveJobModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<canvas id="sc"></canvas>
+
+<script>
+// ── SUPABASE CLIENT ────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://aehdhirvwfawcchkynsr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_AERCG0lWvzWBYP_pKrAdDA_P08ZgPJ-';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let FOLDERS = [];          // populated from Supabase clients table
+let jobs = [];             // active dockets (stage < 5), populated from Supabase
+let submittedJobs = [];    // submitted dockets (stage >= 5), populated from Supabase
+let selB = {d:new Set(), p:new Set()};
+let curStep = 1;
+let editingJobId = null;
+let activeFolder = null;
+let photos = {arr:[], pu:[]};                 // legacy multi-photo zones
+let currentPhotos = {arr:[], pu:[], tip:[], rec:[]};   // unsaved photo blobs queued for upload
+let currentDriver = null;  // {id, auth_user_id, name, phone, sigImg, email}
+let _realtimeChannel = null;
+
+const STAGE_LABELS = ['','Order received','Skip bin delivered','Waste pickup','Disposal','Complete'];
+const STAGE_NEXT   = ['','Continue delivery →','Continue pickup →','Continue disposal →','Submit docket',''];
+const STAGE_CLASS  = ['','stage-order','stage-delivery','stage-pickup','stage-disposal','stage-complete'];
+const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
+
+// Bump this on every code change pushed to this file. Shown in small grey text
+// on the login screen and in the top bar so Al/drivers can tell — just by
+// looking — whether their phone is showing this build or a cached older one,
+// instead of guessing. Update the date/number whenever this file is edited.
+const APP_BUILD = 'build 2026-08-24.2';
+(function stampBuild(){
+  const tags = ['app-build-tag','login-build-tag'];
+  tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
+})();
+
+// ── RENDER FOLDERS ─────────────────────────────────────────────────────────
+function renderFolders() {
+  const list = document.getElementById('folder-list');
+  const totalActive = jobs.length;
+  document.getElementById('total-jobs-label').textContent = totalActive + ' active job' + (totalActive!==1?'s':'');
+  list.innerHTML = FOLDERS.map(f => {
+    const count = jobs.filter(j=>j.folder===f.id).length;
+    return `<div class="folder-item" onclick="openFolder('${f.id}')">
+      <div class="folder-icon ${f.general?'general':''}"><i class="ti ${f.icon}"></i></div>
+      <div class="folder-name">${f.name}</div>
+      ${count>0?`<span class="folder-count">${count}</span>`:''}
+      <button class="folder-edit-btn" onclick="event.stopPropagation();openClientModal('${f._clientId}')"><i class="ti ti-pencil"></i></button>
+      <i class="ti ti-chevron-right folder-chevron"></i>
+    </div>`;
+  }).join('');
+  renderClientSelect();
+}
+
+// Keeps the "New docket" Step 1 client dropdown in sync with the live clients
+// table — it used to be a hardcoded, static option list that never reflected
+// clients added, edited or archived via either app.
+function renderClientSelect() {
+  const sel = document.getElementById('f-client'); if(!sel) return;
+  const prev = sel.value;
+  // "+ Add new client…" and General Skip Assignment sit up top, together —
+  // the two most-reached-for options — ahead of the alphabetical client list.
+  const generalFolders = FOLDERS.filter(f => f.general);
+  const namedFolders = FOLDERS.filter(f => !f.general);
+  const opts = ['<option value="">Select client...</option>', '<option value="__add_new__">+ Add new client…</option>'];
+  generalFolders.forEach(f => {
+    opts.push('<option value="'+f.name.replace(/"/g,'&quot;')+'">'+f.name+' (one-off)</option>');
+  });
+  namedFolders.forEach(f => {
+    opts.push('<option value="'+f.name.replace(/"/g,'&quot;')+'">'+f.name+'</option>');
+  });
+  sel.innerHTML = opts.join('');
+  if(prev && prev !== '__add_new__' && FOLDERS.some(f=>f.name===prev)) sel.value = prev;
+}
+
+function openFolder(folderId) {
+  activeFolder = folderId;
+  const folder = FOLDERS.find(f=>f.id===folderId);
+  document.getElementById('client-title').textContent = folder.name;
+  const folderJobs = jobs.filter(j=>j.folder===folderId);
+  // Jobs filed away from the Submitted tab live here too, so a client's
+  // completed history is browsable from their folder instead of piling up
+  // in one long flat list.
+  const filedJobs = submittedJobs.filter(j=>j.folder===folderId && j.filed);
+  document.getElementById('client-subtitle').textContent = folderJobs.length + ' active job' + (folderJobs.length!==1?'s':'');
+  renderClientJobs(folderJobs, filedJobs);
+  document.getElementById('view-folders').style.display='none';
+  document.getElementById('view-client').style.display='block';
+}
+
+function renderClientJobs(jobList, filedJobs) {
+  filedJobs = filedJobs || [];
+  const container = document.getElementById('client-jobs-list');
+  let html = '';
+  if(!jobList.length) {
+    html += '<div style="text-align:center;padding:40px 20px;color:#bbb"><i class="ti ti-inbox" style="font-size:36px;display:block;margin-bottom:8px"></i><div style="font-size:13px">No active jobs</div><div style="font-size:11px;margin-top:4px">Tap + New docket to start one</div></div>';
+  } else {
+    html += jobList.map(j => jobCard(j)).join('');
+  }
+  if(filedJobs.length) {
+    html += '<div style="padding:16px 4px 8px;font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px">Completed (' + filedJobs.length + ')</div>';
+    html += filedJobs.map(j => doneCard(j, {hideFileBtn:true})).join('');
+  }
+  container.innerHTML = html;
+}
+
+function jobCard(j) {
+  const progSegs = [1,2,3,4].map(s => `<div class="prog-seg ${s<j.stage?'done':s===j.stage?'active':''}"></div>`).join('');
+  const nextLabel = j.stage < 5 ? STAGE_NEXT[j.stage] : 'Completed';
+  const nextClass = STAGE_NEXT_CLASS[j.stage] || '';
+  const bins = (j.bins_pu&&j.bins_pu.length ? j.bins_pu : j.bins_del)||[];
+  const binsLabel = bins.map(b=>'Bin '+b).join(', ') || '—';
+  const fmtD = d => { if(!d)return '—'; const[y,m,day]=d.split('-');const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(day)+' '+M[parseInt(m)-1]; };
+  // "Move to folder" only makes sense for jobs still sitting in the General
+  // Skip Assignment bucket — a job already inside a client folder is already
+  // where it belongs.
+  const jFolder = FOLDERS.find(f => f.id === j.folder);
+  const isGeneralJob = !!(jFolder && jFolder.general);
+  const moveBtn = isGeneralJob ? `<button class="move-btn" onclick="event.stopPropagation();openMoveJobModal('${j.id}')" title="Move to client folder"><i class="ti ti-folder-plus"></i></button>` : '';
+  return `<div class="job-card" id="jc-${j.id}">
+    <div class="job-card-top">
+      <div><div class="job-site">${j.site}</div><div class="job-id">${j.id} · ${fmtD(j.date)}</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <span class="job-stage-pill ${STAGE_CLASS[j.stage]}">${STAGE_LABELS[j.stage]}</span>
+        <div style="display:flex;gap:6px">
+          ${moveBtn}
+          <button class="void-btn" onclick="event.stopPropagation();openVoidJobModal('${j.id}')" title="Void job"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+    </div>
+    <div class="job-progress">${progSegs}</div>
+    <div class="job-meta">
+      <div class="job-tag"><i class="ti ti-box"></i>${j.binType}</div>
+      <div class="job-tag"><i class="ti ti-trash"></i>${j.wasteType}</div>
+      <div class="job-tag"><i class="ti ti-stack-2"></i>${binsLabel}</div>
+    </div>
+    <div class="signoff-row">${signoffSummary(j)}</div>
+    ${j.stage < 5 ? `<button class="job-next ${nextClass}" onclick="continueJob('${j.id}')">${nextLabel} <i class="ti ti-arrow-right"></i></button>` : '<div style="background:#e1f5ee;color:#155724;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:600"><i class="ti ti-circle-check"></i> Completed</div>'}
+  </div>`;
+}
+
+function signoffSummary(j) {
+  const sigs = j.sigs || {};
+  const fmt = (label, v) => {
+    if(!v) return label+': pending';
+    const name = (typeof v === 'object' ? v.by : null) || 'signed';
+    return label+': '+name;
+  };
+  return [fmt('Delivered', sigs.delivery), fmt('Pickup', sigs.pickup), fmt('Disposal', sigs.disposal)].join(' &middot; ');
+}
+
+function backToFolders() {
+  document.getElementById('view-folders').style.display='block';
+  document.getElementById('view-client').style.display='none';
+  activeFolder = null;
+  renderFolders();
+}
+
+function startNewJobForClient() {
+  const folder = FOLDERS.find(f=>f.id===activeFolder);
+  showTab('form');
+  resetForm();
+  if(folder) {
+    document.getElementById('f-client').value = folder.name;
+    document.getElementById('form-title').textContent = folder.name;
+  }
+}
+
+// ── SEARCH ─────────────────────────────────────────────────────────────────
+function searchJobs(q) {
+  if(!q.trim()) { clearSearch(); return; }
+  document.getElementById('view-folders').style.display='none';
+  document.getElementById('view-client').style.display='none';
+  document.getElementById('view-search').style.display='block';
+  const lq = q.toLowerCase();
+  const results = jobs.filter(j =>
+    j.client.toLowerCase().includes(lq) ||
+    j.site.toLowerCase().includes(lq) ||
+    j.id.toLowerCase().includes(lq) ||
+    j.wasteType.toLowerCase().includes(lq) ||
+    (j.bins_del||[]).some(b=>('bin '+b).includes(lq)) ||
+    (j.bins_pu||[]).some(b=>('bin '+b).includes(lq))
+  );
+  document.getElementById('search-result-label').textContent = results.length + ' result' + (results.length!==1?'s':'');
+  const container = document.getElementById('search-results');
+  container.innerHTML = results.length ? results.map(j=>jobCard(j)).join('') : '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px">No jobs found</div>';
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('view-search').style.display='none';
+  document.getElementById('view-folders').style.display='block';
+}
+
+// ── CONTINUE JOB ──────────────────────────────────────────────────────────
+function continueJob(jobId) {
+  const j = jobs.find(x=>x.id===jobId);
+  if(!j) return;
+  editingJobId = jobId;
+  // Pre-fill form fields from job data
+  document.getElementById('f-client').value = j.client;
+  const oo1 = document.getElementById('f-oneoff-name'); if(oo1) oo1.value = j.oneoffName || '';
+  const oo2 = document.getElementById('f-oneoff-contact'); if(oo2) oo2.value = j.oneoffContact || '';
+  onClientChange();
+  document.getElementById('f-location').value = j.site;
+  document.getElementById('f-date').value = j.date;
+  document.getElementById('f-bintype').value = j.binType;
+  document.getElementById('f-wastetype').value = j.wasteType;
+  document.getElementById('f-comments').value = j.comments||'';
+  if(j.arrDate) document.getElementById('f-arr-date').value = j.arrDate;
+  if(j.arrTime) document.getElementById('f-arr-time').value = j.arrTime;
+  if(j.rego) document.getElementById('f-rego').value = j.rego;
+  if(j.puDate) document.getElementById('f-pu-date').value = j.puDate;
+  if(j.puTime) document.getElementById('f-pu-time').value = j.puTime;
+  if(j.puRego) document.getElementById('f-pu-rego').value = j.puRego;
+  if(j.disDate) document.getElementById('f-dis-date').value = j.disDate;
+  if(j.disTime) document.getElementById('f-dis-time').value = j.disTime;
+  if(j.facility) document.getElementById('f-facility').value = j.facility;
+  if(j.weight) document.getElementById('fw').value = j.weight;
+  if(j.cbm) document.getElementById('fcbm').value = j.cbm;
+  // Set bins
+  selB.d = new Set(j.bins_del||[]);
+  selB.p = new Set(j.bins_pu||[]);
+  // Set pcts
+  if(j.pcts) { Object.entries({construction:'pc',concrete:'pco',demolition:'pd',green:'pg2',steel:'ps',venm:'pv'}).forEach(([k,id])=>{ const e=document.getElementById(id); if(e)e.value=j.pcts[k]||0; }); updPct(); }
+  // Set sigs — normalise legacy boolean sigs to object form
+  currentSigs = {};
+  ['delivery','pickup','disposal'].forEach(stage => {
+    const v = j.sigs && j.sigs[stage];
+    if(!v) return;
+    currentSigs[stage] = (typeof v === 'object') ? v : {by:'(legacy)', at:'Previously recorded', sigImg:''};
+  });
+  unlockAllSteps();
+  if(currentSigs.delivery) { renderSigBox('sig-del', currentSigs.delivery, true); lockStep(2, currentSigs.delivery.by, currentSigs.delivery.at); }
+  else renderSigBox('sig-del', null, false);
+  if(currentSigs.pickup)   { renderSigBox('sig-pu',  currentSigs.pickup,   true); lockStep(3, currentSigs.pickup.by,   currentSigs.pickup.at); }
+  else renderSigBox('sig-pu', null, false);
+  if(currentSigs.disposal) { renderSigBox('sig-dis', currentSigs.disposal, true); lockStep(4, currentSigs.disposal.by, currentSigs.disposal.at); }
+  else renderSigBox('sig-dis', null, false);
+  // Navigate to next step
+  const nextStep = Math.min(j.stage + 1, 4);
+  document.getElementById('form-title').textContent = j.client + ' — ' + j.id;
+  document.getElementById('form-sub').textContent = 'Continuing from ' + STAGE_LABELS[j.stage];
+  showTab('form');
+  // Build bin pickers then go to step
+  setTimeout(() => {
+    goStep(nextStep);
+    if(nextStep>=2) { bld('bpd','d'); }
+    if(nextStep>=3) { bld('bpp','p'); }
+    updR();
+  }, 50);
+}
+
+function cancelForm() {
+  showTab('jobs');
+  if(activeFolder) openFolder(activeFolder);
+  editingJobId = null;
+}
+
+// ── FORM LOGIC ─────────────────────────────────────────────────────────────
+function onClientChange() {
+  const sel = document.getElementById('f-client');
+  const v = sel.value;
+  if(v === '__add_new__') {
+    sel.value = '';
+    openClientModal(null, 'docketForm');
+    return;
+  }
+  document.getElementById('form-title').textContent = v || 'New docket';
+  const oneoff = document.getElementById('oneoff-block');
+  const f = FOLDERS.find(x => x.name === v);
+  if(oneoff) oneoff.style.display = (f && f.general) ? '' : 'none';
+}
+
+function goStep(n) {
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('st'+i);
+    if(el) { if(i===n) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+    const sg = document.getElementById('sg'+i);
+    if(sg) { sg.className='sseg'; if(i<n)sg.classList.add('done'); else if(i===n)sg.classList.add('active'); }
+  });
+  curStep = n;
+  document.getElementById('form-sub').textContent = 'Step '+n+' of 4';
+  if(n===2 && !document.getElementById('bgd')) bld('bpd','d');
+  if(n===3 && !document.getElementById('bgp')) bld('bpp','p');
+  // Scroll to top of form
+  document.getElementById('scr-form').scrollTop = 0;
+  window.scrollTo(0,0);
+}
+
+function bld(cId, z) {
+  const c = document.getElementById(cId); if(!c) return;
+  const sId='bs'+z, gId='bg'+z, tId='bt'+z;
+  c.innerHTML = '<div class="bin-picker"><div class="bsrow"><i class="ti ti-search" style="font-size:13px;color:#bbb"></i><input type="text" id="'+sId+'" placeholder="Search bins 1–100..." oninput="fb(event,\''+z+'\',\''+gId+'\',\''+tId+'\')"></div><div class="bgrid" id="'+gId+'"></div><div class="bhint">Tap to select · tap again to deselect · multiple bins allowed</div><div class="btags" id="'+tId+'"></div></div>';
+  rg(z,gId,tId,'');
+}
+
+function rg(z,gId,tId,f) {
+  const grid=document.getElementById(gId); if(!grid) return;
+  const bins=[]; for(let i=1;i<=100;i++) bins.push(i);
+  const fil = f ? bins.filter(b=>(''+b).includes(f.trim())) : bins;
+  grid.innerHTML = fil.map(n=>'<button class="bb'+(selB[z].has(n)?' sel':'')+'" onclick="tb(\''+z+'\','+n+',\''+gId+'\',\''+tId+'\',\'bs'+z+'\')">'+ n+'</button>').join('');
+  rt(z,tId);
+}
+
+function fb(e,z,gId,tId){ rg(z,gId,tId,e.target.value); }
+function tb(z,n,gId,tId,sId){ if(selB[z].has(n))selB[z].delete(n);else selB[z].add(n); rg(z,gId,tId,document.getElementById(sId)?.value||''); }
+function rt(z,tId){ const el=document.getElementById(tId); if(!el)return; const s=[...selB[z]].sort((a,b)=>a-b); el.innerHTML=s.length?s.map(n=>'<span class="btag">Bin '+n+'<button onclick="rb(event,\''+z+'\','+n+')">&times;</button></span>').join(''):'<span style="font-size:9px;color:#aaa">No bins selected</span>'; }
+function rb(e,z,n){ e.stopPropagation(); selB[z].delete(n); rg(z,'bg'+z,'bt'+z,document.getElementById('bs'+z)?.value||''); }
+
+function updPct() {
+  const ids=['pc','pco','pd','pg2','ps','pv'];
+  const tot=ids.reduce((s,id)=>{const e=document.getElementById(id);return s+(parseInt(e?.value||0)||0);},0);
+  const el=document.getElementById('pt');
+  if(el){el.textContent=tot+'%';el.style.color=tot===100?'#155724':tot>100?'#A32D2D':'#666';}
+  document.getElementById('va').classList.toggle('hidden',(parseInt(document.getElementById('pv').value)||0)===0);
+}
+
+function updR() {
+  const t=parseFloat(document.getElementById('fw')?.value)||0;
+  document.getElementById('wt').textContent=t>0?t.toFixed(3):'—';
+  document.getElementById('wkg').textContent=t>0?Math.round(t*1000).toLocaleString():'—';
+}
+
+// SIG_KEYS maps DOM id → stage key
+const SIG_KEYS = {'sig-del':'delivery','sig-pu':'pickup','sig-dis':'disposal'};
+const SIG_LABELS = {'sig-del':'Confirms bin delivered to site','sig-pu':'Confirms waste loaded for disposal','sig-dis':'Confirms waste disposed at facility'};
+let currentSigs = {}; // {delivery:{by,at,sigImg}, ...}
+
+function doSign(id) {
+  const stage = SIG_KEYS[id]; if(!stage) return;
+  const driver = getCurrentDriver();
+  if(!driver) { showToast('Set up your driver profile first.'); return; }
+  const sig = { by: driver.name, at: fmtStamp(), sigImg: driver.sigImg || '' };
+  currentSigs[stage] = sig;
+  renderSigBox(id, sig, false);
+}
+
+function renderSigBox(id, sig, locked) {
+  const el = document.getElementById(id); if(!el) return;
+  if(!sig) {
+    el.classList.remove('signed');
+    el.onclick = () => doSign(id);
+    el.innerHTML = '<i class="ti ti-signature sico"></i><div class="sbt"><p>Tap to sign</p><small>'+(SIG_LABELS[id]||'')+'</small></div>';
+    return;
+  }
+  el.classList.add('signed');
+  el.onclick = null;
+  const imgHTML = sig.sigImg
+    ? '<img src="'+sig.sigImg+'" alt="signature">'
+    : '<span class="no-img">(no signature image on file)</span>';
+  const clearBtn = locked ? '' :
+    '<button class="sig-clear-btn" onclick="event.stopPropagation();clearSig(\''+id+'\')"><i class="ti ti-x" style="font-size:10px"></i>Clear</button>';
+  el.innerHTML =
+    '<div class="sig-img-wrap">'+imgHTML+'</div>'+
+    '<div class="sig-meta">'+
+      '<i class="ti ti-circle-check sico"></i>'+
+      '<div class="sbt"><p>Signed by '+(sig.by||'—')+'</p><small>'+(sig.at||'')+'</small></div>'+
+      clearBtn+
+    '</div>';
+}
+
+function clearSig(id) {
+  const stage = SIG_KEYS[id]; if(!stage) return;
+  delete currentSigs[stage];
+  renderSigBox(id, null, false);
+}
+
+// ── PHOTOS ─────────────────────────────────────────────────────────────────
+function fmtStamp(){const n=new Date();const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];let h=n.getHours(),m=n.getMinutes();const a=h>=12?'PM':'AM';h=h%12||12;return n.getDate()+' '+M[n.getMonth()]+' '+n.getFullYear()+'  '+h+':'+(m<10?'0'+m:m)+' '+a+' UTC+10:00';}
+
+function stImg(src,cb){const i=new Image();i.onload=function(){const c=document.getElementById('sc');const W=i.naturalWidth||800,H=i.naturalHeight||600;c.width=W;c.height=H;const x=c.getContext('2d');x.drawImage(i,0,0,W,H);const bH=Math.round(H*0.12),p=Math.round(W*0.02);x.fillStyle='rgba(0,0,0,0.62)';x.fillRect(0,H-bH,W,bH);const f1=Math.max(11,Math.round(bH*0.32)),f2=Math.max(10,Math.round(bH*0.27));x.fillStyle='#f5c842';x.font='bold '+f1+'px monospace';x.fillText(fmtStamp(),p,H-bH+Math.round(bH*0.38));x.font=f2+'px monospace';x.fillText('McKimm Civil Pty Ltd',p,H-bH+Math.round(bH*0.66));x.fillStyle='rgba(255,255,255,0.8)';x.font=f2+'px monospace';x.fillText('Snowy Skips',p,H-bH+Math.round(bH*0.92));cb(c.toDataURL('image/jpeg',0.88));};i.onerror=()=>cb(src);i.src=src;}
+
+function addPhotos(zone,input){Array.from(input.files).forEach(f=>{const r=new FileReader();r.onload=e=>{stImg(e.target.result,s=>{currentPhotos[zone].push({src:s});rPg(zone);});};r.readAsDataURL(f);});input.value='';}
+function rPg(zone){const g=document.getElementById('pg-'+zone);if(!g)return;g.innerHTML=currentPhotos[zone].map((p,i)=>'<div class="pthumb"><img src="'+p.src+'"><button class="rm" onclick="rmP(\''+zone+'\','+i+')"><i class="ti ti-x"></i></button></div>').join('');}
+function rmP(z,i){currentPhotos[z].splice(i,1);rPg(z);}
+function hsp(zone,input){const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{stImg(e.target.result,s=>{currentPhotos[zone]=[{src:s}];const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);sl.classList.add('has-photo');pp.className='ppreview';pp.innerHTML='<img src="'+s+'"><div class="pstamp"><span>'+fmtStamp()+'</span><span>McKimm Civil Pty Ltd · Snowy Skips</span></div><button class="prm" onclick="rsp(event,\''+zone+'\')"><i class="ti ti-x"></i></button>';});};r.readAsDataURL(f);input.value='';}
+function rsp(e,zone){currentPhotos[zone]=[];e.stopPropagation();const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);sl.classList.remove('has-photo');pp.className='pph';const lbl=zone==='tip'?'Unloaded waste at facility':'Weighbridge docket';pp.innerHTML='<i class="ti ti-photo-plus"></i><p>'+lbl+'</p><div class="pslot-btns"><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-cam\').click()" title="Take photo"><i class="ti ti-camera"></i></button><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-gal\').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button></div>';}
+
+// ── SUBMIT ─────────────────────────────────────────────────────────────────
+function submitForm() {
+  const client = document.getElementById('f-client').value||'Unknown';
+  const site   = document.getElementById('f-location').value||'—';
+  const wt     = document.getElementById('fw')?.value||'?';
+  const cbm    = document.getElementById('fcbm')?.value||'?';
+  const facility = document.getElementById('f-facility')?.value||'—';
+
+  // Update or remove from active jobs
+  if(editingJobId) {
+    const idx = jobs.findIndex(j=>j.id===editingJobId);
+    if(idx>-1) { jobs[idx].stage=5; jobs[idx].submitted=fmtStamp(); }
+    const submitted = jobs.splice(idx,1)[0];
+    submittedJobs.unshift(submitted);
+  } else {
+    const newId = 'MCK-'+(jobs.length+submittedJobs.length+1).toString().padStart(3,'0');
+    submittedJobs.unshift({id:newId,client,site,wt,cbm,facility,submitted:fmtStamp()});
+  }
+
+  renderDoneList();
+  resetForm();
+  showTab('done');
+  editingJobId = null;
+}
+
+function renderDoneList() {
+  const dl = document.getElementById('done-list');
+  const list = submittedJobs.filter(j => !j.filed);
+  if(!list.length){ dl.innerHTML='<div style="text-align:center;padding:40px;color:#bbb"><i class="ti ti-inbox" style="font-size:36px;display:block;margin-bottom:8px"></i>No submitted dockets yet</div>'; return; }
+  dl.innerHTML = list.map(j => doneCard(j)).join('');
+}
+
+// Shared card for a completed job — used both in the flat Submitted tab and
+// (read-only, no File button) in a client folder's Completed section.
+function doneCard(j, opts) {
+  opts = opts || {};
+  const fileBtn = opts.hideFileBtn ? '' :
+    `<button class="btn-s" style="margin-top:9px;width:100%;justify-content:center" onclick="fileJobToFolder('${j.id}')"><i class="ti ti-folder-symlink"></i> File to ${j.client} folder</button>`;
+  return `<div style="background:#fff;border:1px solid #e8e8e8;border-radius:14px;padding:13px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
+      <div><div style="font-size:15px;font-weight:700;color:#1a1a1a">${j.client}</div><div style="font-size:10px;color:#aaa">${j.id} · ${j.submitted||''}</div></div>
+      <span style="background:#e1f5ee;color:#155724;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700">Submitted</span>
+    </div>
+    <div style="font-size:12px;color:#666;line-height:1.6">${j.site||j.location||'—'} · ${j.wasteType||'Construction'}<br>${j.facility||'—'} · ${j.wt||j.weight||'?'}t · ${j.cbm||'?'}m³</div>
+    ${fileBtn}
+  </div>`;
+}
+
+// Moves a completed job out of the flat Submitted tab and into its client's
+// folder (Completed section) — persisted, so it stays filed after a refresh.
+async function fileJobToFolder(jobId) {
+  try {
+    const { error } = await sb.from('dockets').update({ filed_to_folder: true }).eq('id', jobId);
+    if(error) throw error;
+    await loadJobsFromDB();
+    showToast('Filed to client folder');
+  } catch(e) { showToast('Filing failed: '+e.message); }
+}
+
+function resetForm() {
+  ['f-client','f-location','f-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['fw','fcbm'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['f-bintype','f-wastetype','f-facility'].forEach(id=>{const e=document.getElementById(id);if(e)e.selectedIndex=0;});
+  ['pc','pco','pd','pg2','ps','pv'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=0;});
+  document.getElementById('pt').textContent='0%';
+  document.getElementById('va').classList.add('hidden');
+  photos={arr:[],pu:[]};
+  currentPhotos={arr:[],pu:[],tip:[],rec:[]};
+  ['pg-arr','pg-pu'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
+  ['tip','rec'].forEach(zone=>{
+    const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);
+    if(sl)sl.classList.remove('has-photo');
+    if(pp){
+      pp.className='pph';
+      const lbl=zone==='tip'?'Unloaded waste at facility':'Weighbridge docket';
+      pp.innerHTML='<i class="ti ti-photo-plus"></i><p>'+lbl+'</p><div class="pslot-btns"><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-cam\').click()" title="Take photo"><i class="ti ti-camera"></i></button><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-gal\').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button></div>';
+    }
+  });
+  currentSigs = {};
+  unlockAllSteps();
+  ['sig-del','sig-pu','sig-dis'].forEach(id=>renderSigBox(id, null, false));
+  selB={d:new Set(),p:new Set()};
+  document.getElementById('bpd').innerHTML='';
+  document.getElementById('bpp').innerHTML='';
+  document.getElementById('form-title').textContent='New docket';
+  document.getElementById('form-sub').textContent='Step 1 of 4';
+  const today = new Date().toISOString().split('T')[0];
+  const now = new Date().toTimeString().slice(0,5);
+  ['f-date','f-arr-date','f-pu-date','f-dis-date'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=today;});
+  ['f-arr-time','f-pu-time','f-dis-time'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=now;});
+  goStep(1);
+}
+
+// ── TAB SWITCHER ───────────────────────────────────────────────────────────
+function showTab(t) {
+  document.querySelectorAll('.scr').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.ntab').forEach(e=>e.classList.remove('active'));
+  document.getElementById('scr-'+t).classList.add('active');
+  document.getElementById('tab-'+t).classList.add('active');
+  if(t==='jobs') renderFolders();
+  if(t==='done') renderDoneList();
+}
+
+// ── AUTH + DRIVER PROFILE ─────────────────────────────────────────────────
+function showLoginScreen() {
+  const app = document.getElementById('app'); if(app) app.style.display = 'none';
+  const lo = document.getElementById('login-overlay'); if(lo) lo.classList.add('active');
+  switchLoginTab('signin');
+}
+function hideLoginScreen() {
+  const app = document.getElementById('app'); if(app) app.style.display = '';
+  const lo = document.getElementById('login-overlay'); if(lo) lo.classList.remove('active');
+}
+function switchLoginTab(t) {
+  const sIn = document.getElementById('login-tab-signin');
+  const sUp = document.getElementById('login-tab-register');
+  const pIn = document.getElementById('login-pane-signin');
+  const pUp = document.getElementById('login-pane-register');
+  if(t===  'signin') { sIn.classList.add('active'); sUp.classList.remove('active'); pIn.style.display=  ''; pUp.style.display='none'; }
+  else                  { sUp.classList.add('active'); sIn.classList.remove('active'); pUp.style.display=  ''; pIn.style.display='none'; setTimeout(initSigPad, 60); }
+}
+
+async function doSignIn() {
+  const email = document.getElementById('li-email').value.trim();
+  const password = document.getElementById('li-password').value;
+  const errEl = document.getElementById('li-err');
+  const btn = document.getElementById('li-btn-label');
+  errEl.classList.remove('show');
+  if(!email || !password) { errEl.textContent='Email and password required.'; errEl.classList.add('show'); return; }
+  btn.textContent = 'Signing in…';
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) { errEl.textContent=error.message||'Sign in failed.'; errEl.classList.add('show'); btn.textContent='Sign in'; return; }
+    // SIGNED_IN listener will reload
+  } catch(e) { errEl.textContent=e.message||'Network error.'; errEl.classList.add('show'); btn.textContent='Sign in'; }
+}
+
+async function doRegister() {
+  const email = document.getElementById('rg-email').value.trim();
+  const password = document.getElementById('rg-password').value;
+  const name = document.getElementById('rg-name').value.trim();
+  const phone = document.getElementById('rg-phone').value.trim();
+  const sig = getSigDataURL();
+  const errEl = document.getElementById('rg-err');
+  const errSig = document.getElementById('rg-err-sig');
+  const btn = document.getElementById('rg-btn-label');
+  errEl.classList.remove('show'); errSig.classList.remove('show');
+  if(!email || !password || !name) {
+    errEl.textContent = 'Email, password and name required.'; errEl.classList.add('show'); return;
+  }
+  if(password.length < 6) { errEl.textContent='Password must be at least 6 characters.'; errEl.classList.add('show'); return; }
+  if(!sig) { errSig.classList.add('show'); return; }
+  btn.textContent = 'Creating account…';
+  try {
+    const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email, password });
+    if(signUpError) { errEl.textContent=signUpError.message; errEl.classList.add('show'); btn.textContent='Create profile'; return; }
+    const authUserId = signUpData.user && signUpData.user.id;
+    if(!authUserId) { errEl.textContent='Check your email to confirm before signing in.'; errEl.classList.add('show'); btn.textContent='Create profile'; return; }
+    // Insert drivers row. Need an active session for RLS — signUp normally signs in unless email confirmation is required.
+    const { error: insErr } = await sb.from('drivers').insert([{ auth_user_id: authUserId, name, phone: phone||null, sig_img: sig, role: 'driver' }]);
+    if(insErr) { errEl.textContent='Profile save failed: '+insErr.message; errEl.classList.add('show'); btn.textContent='Create profile'; return; }
+    // auth state change listener will reload
+  } catch(e) { errEl.textContent=e.message||'Registration error.'; errEl.classList.add('show'); btn.textContent='Create profile'; }
+}
+
+async function doSignOut() {
+  closeDriverPicker();
+  try { await sb.auth.signOut(); } catch(e) {}
+  // SIGNED_OUT listener will show login screen
+}
+
+async function loadCurrentDriver(authUserId) {
+  try {
+    const { data, error } = await sb.from('drivers').select('*').eq('auth_user_id', authUserId).maybeSingle();
+    if(error) throw error;
+    if(!data) return null;
+    return { id: data.id, auth_user_id: data.auth_user_id, name: data.name, phone: data.phone||'', sigImg: data.sig_img||'', role: data.role||'driver' };
+  } catch(e) { console.error('loadCurrentDriver', e); return null; }
+}
+
+function getCurrentDriver() { return currentDriver; }
+function setCurrentDriver(d) { currentDriver = d; }
+
+function updateTopbarDriver() {
+  const d = currentDriver;
+  const el = document.getElementById('driver-name');
+  if(el) el.textContent = d ? d.name : '—';
+}
+
+// ── DRIVER PICKER / ACCOUNT SHEET ──
+function openDriverPicker() {
+  if(!currentDriver) return;
+  const nameEl = document.getElementById('dpk-current-name');
+  const emailEl = document.getElementById('dpk-current-email');
+  if(nameEl) nameEl.textContent = currentDriver.name || '—';
+  sb.auth.getSession().then(({data:{session}}) => {
+    if(emailEl) emailEl.textContent = (session && session.user && session.user.email) || '';
+  });
+  document.getElementById('dpk-backdrop').classList.add('active');
+  document.getElementById('dpk-sheet').classList.add('active');
+}
+function closeDriverPicker() {
+  document.getElementById('dpk-backdrop').classList.remove('active');
+  document.getElementById('dpk-sheet').classList.remove('active');
+}
+
+// ── SIGNATURE PAD ──
+let _sigCtx = null, _sigDrawing = false, _sigHasInk = false;
+function initSigPad() {
+  const c = document.getElementById('dp-sigpad'); if(!c) return;
+  const rect = c.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(rect.width * dpr);
+  c.height = Math.round(rect.height * dpr);
+  _sigCtx = c.getContext('2d');
+  _sigCtx.scale(dpr, dpr);
+  _sigCtx.fillStyle = '#fff'; _sigCtx.fillRect(0,0,rect.width,rect.height);
+  _sigCtx.strokeStyle = '#0a2240';
+  _sigCtx.lineWidth = 2.2;
+  _sigCtx.lineCap = 'round';
+  _sigCtx.lineJoin = 'round';
+  _sigHasInk = false;
+  const ph = document.getElementById('dp-sigpad-ph'); if(ph) ph.classList.remove('gone');
+  const getPos = (e) => {
+    const r = c.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - r.left, y: t.clientY - r.top };
+  };
+  const start = (e) => {
+    e.preventDefault(); _sigDrawing = true;
+    const p = getPos(e);
+    _sigCtx.beginPath(); _sigCtx.moveTo(p.x, p.y);
+    if(!_sigHasInk) { _sigHasInk = true; const ph2 = document.getElementById('dp-sigpad-ph'); if(ph2) ph2.classList.add('gone'); }
+  };
+  const move = (e) => {
+    if(!_sigDrawing) return; e.preventDefault();
+    const p = getPos(e);
+    _sigCtx.lineTo(p.x, p.y); _sigCtx.stroke();
+  };
+  const end = (e) => { if(!_sigDrawing) return; if(e&&e.preventDefault)e.preventDefault(); _sigDrawing = false; };
+  c.onmousedown = start; c.onmousemove = move; c.onmouseup = end; c.onmouseleave = end;
+  c.ontouchstart = start; c.ontouchmove = move; c.ontouchend = end; c.ontouchcancel = end;
+}
+function clearSigPad() {
+  const c = document.getElementById('dp-sigpad'); if(!c || !_sigCtx) return;
+  const rect = c.getBoundingClientRect();
+  _sigCtx.fillStyle = '#fff'; _sigCtx.fillRect(0,0,rect.width,rect.height);
+  _sigHasInk = false;
+  const ph = document.getElementById('dp-sigpad-ph'); if(ph) ph.classList.remove('gone');
+}
+function getSigDataURL() {
+  const c = document.getElementById('dp-sigpad'); if(!c || !_sigHasInk) return '';
+  return c.toDataURL('image/png');
+}
+
+// ── DATA LAYER ────────────────────────────────────────────────────────────
+async function loadClientsFromDB() {
+  try {
+    const { data, error } = await sb.from('clients').select('*').eq('active', true).order('name');
+    if(error) throw error;
+    FOLDERS = (data||[]).map(c => ({ id: c.short_code, name: c.name, icon: c.icon||'ti-building', general: !!c.is_general, _clientId: c.id }));
+    renderFolders();
+  } catch(e) { console.error('loadClientsFromDB', e); showToast('Could not load clients: '+e.message); }
+}
+
+// ── CLIENT MANAGEMENT (add/edit/archive) ──────────────────────────────────
+let _editingClientId = null;
+let _clientModalContext = null; // 'docketForm' when opened via "+ Add new client…" in the New docket dropdown
+function openClientModal(id, context) {
+  _editingClientId = id || null;
+  _clientModalContext = context || null;
+  const nameEl = document.getElementById('cmd-name'), codeEl = document.getElementById('cmd-code'),
+        iconEl = document.getElementById('cmd-icon'), genEl = document.getElementById('cmd-general'),
+        titleEl = document.getElementById('cmd-title'), archBtn = document.getElementById('cmd-archive-btn');
+  if(id) {
+    const f = FOLDERS.find(x => x._clientId === id);
+    if(!f) return;
+    titleEl.textContent = 'Edit client';
+    nameEl.value = f.name || '';
+    codeEl.value = f.id || '';
+    iconEl.value = f.icon || 'ti-building';
+    genEl.checked = !!f.general;
+    archBtn.style.display = '';
+  } else {
+    titleEl.textContent = 'Add client';
+    nameEl.value = ''; codeEl.value = ''; iconEl.value = 'ti-building'; genEl.checked = false;
+    archBtn.style.display = 'none';
+  }
+  document.getElementById('cmd-err').classList.remove('show');
+  document.getElementById('cmd-backdrop').classList.add('active');
+  document.getElementById('cmd-sheet').classList.add('active');
+}
+function closeClientModal() {
+  document.getElementById('cmd-backdrop').classList.remove('active');
+  document.getElementById('cmd-sheet').classList.remove('active');
+  _editingClientId = null;
+  _clientModalContext = null;
+}
+async function saveClientModal() {
+  const name = document.getElementById('cmd-name').value.trim();
+  const code = document.getElementById('cmd-code').value.trim().toLowerCase();
+  const icon = document.getElementById('cmd-icon').value;
+  const isGen = document.getElementById('cmd-general').checked;
+  const err = document.getElementById('cmd-err'); err.classList.remove('show');
+  if(!name || !code) { err.textContent = 'Client name and short code are required.'; err.classList.add('show'); return; }
+  if(!/^[a-z0-9_-]+$/.test(code)) { err.textContent = 'Short code: lowercase letters, numbers, dash or underscore only.'; err.classList.add('show'); return; }
+  const saveLabel = document.getElementById('cmd-save-label'); const prevLabel = saveLabel.textContent;
+  saveLabel.textContent = 'Saving…';
+  try {
+    let r;
+    if(_editingClientId) {
+      r = await sb.from('clients').update({ name, short_code: code, icon, is_general: isGen }).eq('id', _editingClientId);
+    } else {
+      r = await sb.from('clients').insert([{ name, short_code: code, icon, is_general: isGen, active: true }]);
+    }
+    if(r.error) throw r.error;
+    const wasEditing = !!_editingClientId;
+    const wasDocketForm = _clientModalContext === 'docketForm';
+    const wasMoveJob = _clientModalContext === 'moveJob';
+    closeClientModal();
+    await loadClientsFromDB();
+    if(!wasEditing && wasDocketForm) {
+      const sel = document.getElementById('f-client');
+      if(sel) { sel.value = name; onClientChange(); }
+    }
+    let handledByMove = false;
+    if(!wasEditing && wasMoveJob && _movingJobId) {
+      const newFolder = FOLDERS.find(f => f.name === name);
+      if(newFolder) { handledByMove = true; await moveJobToClient(newFolder.id); }
+    }
+    // Skip the generic toast when moveJobToClient() already showed its own
+    // "Moved to [Client] folder" confirmation — avoids two toasts in a row.
+    if(!handledByMove) showToast(wasEditing ? 'Client updated' : 'Client added');
+  } catch(e) {
+    err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
+  } finally {
+    saveLabel.textContent = prevLabel;
+  }
+}
+async function archiveClientFromModal() {
+  if(!_editingClientId) return;
+  try {
+    const { error } = await sb.from('clients').update({ active: false }).eq('id', _editingClientId);
+    if(error) throw error;
+    closeClientModal();
+    await loadClientsFromDB();
+    showToast('Client archived — removed from Jobs. Restore it from the office app if needed.');
+  } catch(e) {
+    const err = document.getElementById('cmd-err');
+    err.textContent = 'Archive failed: ' + e.message; err.classList.add('show');
+  }
+}
+
+function rowToJob(row) {
+  if(!row) return null;
+  let folderId = 'general';
+  const m = FOLDERS.find(f => f._clientId === row.client_id) || FOLDERS.find(f => f.name === row.client_name);
+  if(m) folderId = m.id;
+  // Normalise sigs: DB stores sig_img (snake) inside each stage object; UI uses sigImg.
+  const sigsIn = row.sigs || {};
+  const sigsOut = {};
+  ['delivery','pickup','disposal'].forEach(k => {
+    const v = sigsIn[k];
+    if(!v) return;
+    if(typeof v === 'object') sigsOut[k] = { by: v.by||'', at: v.at||'', sigImg: v.sig_img||v.sigImg||'' };
+    else sigsOut[k] = v;
+  });
+  return {
+    id: row.id,
+    folder: folderId,
+    client_id: row.client_id,
+    client: row.client_name || (m && m.name) || '',
+    oneoffName: row.oneoff_name || '',
+    oneoffContact: row.oneoff_contact || '',
+    site: row.site || '',
+    date: row.date || '',
+    binType: row.bin_type || '',
+    wasteType: row.waste_type || '',
+    comments: row.comments || '',
+    arrDate: row.arr_date || '',
+    arrTime: row.arr_time || '',
+    rego: row.rego || '',
+    bins_del: row.bins_delivered || [],
+    puDate: row.pu_date || '',
+    puTime: row.pu_time || '',
+    puRego: row.pu_rego || '',
+    bins_pu: row.bins_picked_up || [],
+    pcts: row.waste_pcts || {},
+    disDate: row.dis_date || '',
+    disTime: row.dis_time || '',
+    facility: row.facility || '',
+    weight: row.weight || null,
+    cbm: row.cbm || null,
+    sigs: sigsOut,
+    stage: row.stage || 1,
+    has_nc: !!row.has_nc,
+    submitted_at: row.submitted_at,
+    submitted: row.submitted_at ? new Date(row.submitted_at).toLocaleString() : '',
+    filed: !!row.filed_to_folder,
+    photos: { arr:[], pu:[], tip:[], rec:[] }
+  };
+}
+
+function jobToRow(job, stageKey) {
+  // Map UI camelCase fields to DB snake_case columns.
+  const folderEntry = FOLDERS.find(f => f.id === job.folder) || FOLDERS.find(f => f.name === job.client);
+  const sigsOut = {};
+  Object.keys(job.sigs||{}).forEach(k => {
+    const v = job.sigs[k]; if(!v) return;
+    sigsOut[k] = (typeof v === 'object') ? { by: v.by||'', at: v.at||'', sig_img: v.sigImg||v.sig_img||'' } : v;
+  });
+  return {
+    id: job.id,
+    client_id: (folderEntry && folderEntry._clientId) || null,
+    client_name: job.client || null,
+    oneoff_name: job.oneoffName || null,
+    oneoff_contact: job.oneoffContact || null,
+    site: job.site || null,
+    date: job.date || null,
+    bin_type: job.binType || null,
+    waste_type: job.wasteType || null,
+    comments: job.comments || null,
+    arr_date: job.arrDate || null,
+    arr_time: job.arrTime || null,
+    rego: job.rego || null,
+    bins_delivered: job.bins_del || [],
+    pu_date: job.puDate || null,
+    pu_time: job.puTime || null,
+    pu_rego: job.puRego || null,
+    bins_picked_up: job.bins_pu || [],
+    waste_pcts: job.pcts || {},
+    dis_date: job.disDate || null,
+    dis_time: job.disTime || null,
+    facility: job.facility || null,
+    weight: job.weight || null,
+    cbm: job.cbm || null,
+    sigs: sigsOut,
+    stage: job.stage || 1,
+    has_nc: !!job.has_nc,
+    created_by: (currentDriver && currentDriver.id) || null,
+    submitted_by: (currentDriver && currentDriver.id) || null,
+    submitted_at: job.submitted_at || (stageKey===  'disposal' ? new Date().toISOString() : null)
+  };
+}
+
+async function loadJobsFromDB() {
+  try {
+    const { data: active, error: e1 } = await sb.from('dockets').select('*').lt('stage', 5).eq('voided', false).order('created_at', { ascending: false });
+    if(e1) throw e1;
+    jobs = (active||[]).map(rowToJob).filter(Boolean);
+    // Raised from 50: this pool now also feeds each client folder's Completed
+    // section, not just the flat Submitted tab, so it needs more headroom.
+    const { data: done, error: e2 } = await sb.from('dockets').select('*').gte('stage', 5).eq('voided', false).order('submitted_at', { ascending: false }).limit(300);
+    if(e2) throw e2;
+    submittedJobs = (done||[]).map(rowToJob).filter(Boolean);
+    renderFolders();
+    renderDoneList();
+  } catch(e) { console.error('loadJobsFromDB', e); showToast('Could not load dockets: '+e.message); }
+}
+
+// ── VOID JOB (soft-delete) ─────────────────────────────────────────────────
+// For a contract that never happened, a bin pulled without going through
+// the system, or a job entered by mistake. Not a hard delete — the docket
+// row stays in the database (with a reason) for compliance purposes; it
+// just stops showing up here and on the office board.
+let _voidingJobId = null;
+function openVoidJobModal(jobId) {
+  _voidingJobId = jobId;
+  document.getElementById('vjm-reason').value = '';
+  document.getElementById('vjm-err').classList.remove('show');
+  document.getElementById('vjm-backdrop').classList.add('active');
+  document.getElementById('vjm-sheet').classList.add('active');
+}
+function closeVoidJobModal() {
+  document.getElementById('vjm-backdrop').classList.remove('active');
+  document.getElementById('vjm-sheet').classList.remove('active');
+  _voidingJobId = null;
+}
+async function confirmVoidJob() {
+  const reason = document.getElementById('vjm-reason').value.trim();
+  const err = document.getElementById('vjm-err'); err.classList.remove('show');
+  if(!reason) { err.textContent = 'Reason is required.'; err.classList.add('show'); return; }
+  if(!_voidingJobId) return;
+  const jobId = _voidingJobId;
+  try {
+    const { error } = await sb.from('dockets').update({
+      voided: true, void_reason: reason, voided_at: new Date().toISOString(), voided_by: (currentDriver && currentDriver.id) || null
+    }).eq('id', jobId);
+    if(error) throw error;
+    await sb.from('audit_log').insert([{ docket_id: jobId, action: 'voided', performed_by: (currentDriver && currentDriver.id) || null, notes: reason }]);
+    closeVoidJobModal();
+    await loadJobsFromDB();
+    showToast('Job voided');
+  } catch(e) {
+    err.textContent = 'Void failed: ' + e.message; err.classList.add('show');
+  }
+}
+
+// ── MOVE JOB TO CLIENT FOLDER ────────────────────────────────────────────
+// For a General Skip Assignment (one-off) job that turns out to belong to
+// an existing (or brand-new) client — relinks just this one docket, same
+// scope as the office app's "Convert to client folder" action.
+let _movingJobId = null;
+function openMoveJobModal(jobId) {
+  _movingJobId = jobId;
+  document.getElementById('mvj-err').classList.remove('show');
+  renderMoveJobList();
+  document.getElementById('mvj-backdrop').classList.add('active');
+  document.getElementById('mvj-sheet').classList.add('active');
+}
+function closeMoveJobModal() {
+  document.getElementById('mvj-backdrop').classList.remove('active');
+  document.getElementById('mvj-sheet').classList.remove('active');
+  // Note: _movingJobId is deliberately NOT cleared here — when "+ Add new
+  // client…" is tapped this modal closes but the move is still in progress,
+  // to be completed once the new client is saved (see saveClientModal()).
+  // It's always overwritten fresh the next time a move starts.
+}
+function openAddClientForMove() {
+  closeMoveJobModal();
+  openClientModal(null, 'moveJob');
+}
+function renderMoveJobList() {
+  const list = document.getElementById('mvj-list'); if(!list) return;
+  const named = FOLDERS.filter(f => !f.general);
+  const rows = ['<div class="mvj-row add-new" onclick="openAddClientForMove()"><i class="ti ti-folder-plus"></i> + Add new client…</div>'];
+  if(!named.length) rows.push('<div class="mvj-empty">No client folders yet — add one above.</div>');
+  named.forEach(f => {
+    rows.push(`<div class="mvj-row" onclick="moveJobToClient('${f.id}')"><i class="ti ${f.icon}"></i> ${f.name}</div>`);
+  });
+  list.innerHTML = rows.join('');
+}
+async function moveJobToClient(folderId) {
+  if(!_movingJobId) return;
+  const jobId = _movingJobId;
+  const folder = FOLDERS.find(f => f.id === folderId);
+  if(!folder) return;
+  const err = document.getElementById('mvj-err'); err.classList.remove('show');
+  try {
+    const { error } = await sb.from('dockets').update({
+      client_id: folder._clientId, client_name: folder.name, oneoff_name: null, oneoff_contact: null
+    }).eq('id', jobId);
+    if(error) throw error;
+    await sb.from('audit_log').insert([{ docket_id: jobId, action: 'moved to folder', performed_by: (currentDriver && currentDriver.id) || null, notes: 'Moved to '+folder.name+' folder' }]);
+    _movingJobId = null;
+    closeMoveJobModal();
+    await loadJobsFromDB();
+    showToast('Moved to '+folder.name+' folder');
+  } catch(e) {
+    err.textContent = 'Move failed: ' + e.message; err.classList.add('show');
+  }
+}
+
+function subscribeToRealtime() {
+  if(_realtimeChannel) try { sb.removeChannel(_realtimeChannel); } catch(e) {}
+  try {
+    _realtimeChannel = sb.channel('dockets-feed-driver')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dockets' }, () => loadJobsFromDB())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => loadClientsFromDB())
+      .subscribe();
+  } catch(e) { console.warn('realtime subscribe failed', e); }
+}
+
+async function generateDocketIdFromDB() {
+  try {
+    const { count } = await sb.from('dockets').select('*', { count: 'exact', head: true });
+    let n = (count || 0) + 1;
+    // Probe until unused
+    for(let i=0;i<200;i++) {
+      const id = 'MCK-' + String(n+i).padStart(3, '0');
+      const { data } = await sb.from('dockets').select('id').eq('id', id).maybeSingle();
+      if(!data) return id;
+    }
+    return 'MCK-' + String(Date.now()).slice(-6);
+  } catch(e) { console.error('generateDocketId', e); return 'MCK-' + String(Date.now()).slice(-6); }
+}
+
+async function uploadDocketPhotos(docketId) {
+  // currentPhotos = { arr:[{src}], pu:[{src}], tip:[{src}], rec:[{src}] }
+  const zones = ['arr','pu','tip','rec'];
+  let anyFailed = false;
+  for(const zone of zones) {
+    const list = currentPhotos[zone] || [];
+    for(let i=0;i<list.length;i++) {
+      const item = list[i];
+      try {
+        const blob = await (await fetch(item.src)).blob();
+        const path = docketId+'/'+zone+'_'+Date.now()+'_'+i+'.jpg';
+        const { error: upErr } = await sb.storage.from('docket-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+        if(upErr) throw upErr;
+        await sb.from('photos').insert([{ docket_id: docketId, zone, storage_path: path, uploaded_by: (currentDriver && currentDriver.id) || null }]);
+      } catch(e) { console.error('photo upload', zone, e); anyFailed = true; }
+    }
+  }
+  if(anyFailed) showToast('Some photos failed to upload — check signal.');
+  else { currentPhotos = { arr:[], pu:[], tip:[], rec:[] }; }
+}
+
+async function saveDocketToDB(job, stageKey) {
+  try {
+    const { error } = await sb.from('dockets').upsert(jobToRow(job, stageKey), { onConflict: 'id' });
+    if(error) throw error;
+    await sb.from('audit_log').insert([{ docket_id: job.id, action: (stageKey===  'order' ? 'saved:order' : 'signed:'+stageKey), performed_by: (currentDriver && currentDriver.id) || null }]);
+    return true;
+  } catch(e) { console.error('saveDocketToDB', e); showToast(navigator.onLine===false ? 'Offline — cannot save right now. Try again when you have signal.' : ('Save failed: '+e.message)); return false; }
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+function bootApp() {
+  const a = document.getElementById('app'); if(a) a.style.display = 'flex';
+  const today = new Date().toISOString().split('T')[0];
+  const now   = new Date().toTimeString().slice(0,5);
+  ['f-date','f-arr-date','f-pu-date','f-dis-date'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=today;});
+  ['f-arr-time','f-pu-time','f-dis-time'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=now;});
+  updateTopbarDriver();
+  renderFolders();
+}
+
+async function init() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session) { showLoginScreen(); return; }
+    const driver = await loadCurrentDriver(session.user.id);
+    if(!driver) {
+      // auth user exists but no drivers row — force them to register profile via tab
+      showLoginScreen(); switchLoginTab('register');
+      const rge = document.getElementById('rg-email'); if(rge) { rge.value = session.user.email || ''; rge.disabled = true; }
+      const rgp = document.getElementById('rg-password'); if(rgp) rgp.disabled = true;
+      showToast('Complete your driver profile to continue.');
+      return;
+    }
+    setCurrentDriver(driver);
+    hideLoginScreen();
+    await loadClientsFromDB();
+    await loadJobsFromDB();
+    subscribeToRealtime();
+    bootApp();
+  } catch(e) { console.error('init', e); showToast('Startup error: '+(e.message||e)); }
+}
+
+let _lastAuthEvent = 0;
+sb.auth.onAuthStateChange((event, session) => {
+  // Debounce: ignore SIGNED_IN events firing within 2s of each other (prevents reload loops on flaky networks)
+  const now = Date.now();
+  if (event === 'SIGNED_IN' && now - _lastAuthEvent < 2000) return;
+  _lastAuthEvent = now;
+  if(event === 'SIGNED_OUT') { currentDriver = null; showLoginScreen(); }
+  if(event === 'SIGNED_IN') { init(); }  // re-init instead of full page reload
+});
+
+init();
+// Watchdog: if init() doesn't complete within 8s, force-show login so user isn't stuck on a blank page.
+setTimeout(() => {
+  const lo = document.getElementById('login-overlay');
+  const app = document.getElementById('app');
+  const appHidden = app && getComputedStyle(app).display === 'none';
+  const loInactive = lo && !lo.classList.contains('active');
+  if (loInactive && appHidden) {
+    console.warn('init watchdog: forcing login screen visible');
+    if (typeof showLoginScreen === 'function') showLoginScreen();
+    else lo.classList.add('active');
+  }
+}, 8000);
+
+// ── LOCKED STEP HELPERS ──
+function lockStep(stepNum, by, at) {
+  const st = document.getElementById('st'+stepNum); if(!st) return;
+  st.classList.add('locked-fields');
+  st.querySelectorAll('input, select, textarea, .bb').forEach(el => {
+    if(el.id && el.id.startsWith('dp-')) return;
+    el.disabled = true;
+  });
+  if(!st.querySelector('.lock-banner')) {
+    const b = document.createElement('div');
+    b.className = 'lock-banner';
+    b.innerHTML = '<i class="ti ti-lock"></i><span>Locked — signed by '+(by||'driver')+' on '+(at||'')+'</span>'+
+      '<button class="reopen" onclick="reopenStep('+stepNum+')">Reopen step</button>';
+    st.insertBefore(b, st.firstChild);
+  }
+}
+function unlockAllSteps() {
+  [2,3,4].forEach(n => {
+    const st = document.getElementById('st'+n); if(!st) return;
+    st.classList.remove('locked-fields');
+    st.querySelectorAll('input, select, textarea, .bb').forEach(el => { el.disabled = false; });
+    const b = st.querySelector('.lock-banner'); if(b) b.remove();
+  });
+}
+function reopenStep(n) {
+  alert('Office use only — reason required (not implemented yet)');
+}
+
+// ── SAVE & EXIT (per stage) ──
+function gatherFormData() {
+  return {
+    client: document.getElementById('f-client').value || '',
+    oneoffName: (document.getElementById('f-oneoff-name') && document.getElementById('f-oneoff-name').value) || '',
+    oneoffContact: (document.getElementById('f-oneoff-contact') && document.getElementById('f-oneoff-contact').value) || '',
+    site: document.getElementById('f-location').value || '',
+    date: document.getElementById('f-date').value || '',
+    binType: document.getElementById('f-bintype').value || '',
+    wasteType: document.getElementById('f-wastetype').value || '',
+    comments: document.getElementById('f-comments').value || '',
+    arrDate: document.getElementById('f-arr-date').value || '',
+    arrTime: document.getElementById('f-arr-time').value || '',
+    rego: document.getElementById('f-rego').value || '',
+    bins_del: [...selB.d],
+    puDate: document.getElementById('f-pu-date').value || '',
+    puTime: document.getElementById('f-pu-time').value || '',
+    puRego: document.getElementById('f-pu-rego').value || '',
+    bins_pu: [...selB.p],
+    pcts: {
+      construction: parseInt(document.getElementById('pc')?.value||0)||0,
+      concrete:     parseInt(document.getElementById('pco')?.value||0)||0,
+      demolition:   parseInt(document.getElementById('pd')?.value||0)||0,
+      green:        parseInt(document.getElementById('pg2')?.value||0)||0,
+      steel:        parseInt(document.getElementById('ps')?.value||0)||0,
+      venm:         parseInt(document.getElementById('pv')?.value||0)||0
+    },
+    disDate: document.getElementById('f-dis-date').value || '',
+    disTime: document.getElementById('f-dis-time').value || '',
+    facility: document.getElementById('f-facility').value || '',
+    weight: parseFloat(document.getElementById('fw')?.value)||null,
+    cbm: parseFloat(document.getElementById('fcbm')?.value)||null
+  };
+}
+
+function showInlineAlert(stepNum, msg) {
+  const st = document.getElementById('st'+stepNum); if(!st) return;
+  st.querySelectorAll('.inline-alert').forEach(e=>e.remove());
+  const a = document.createElement('div');
+  a.className = 'inline-alert';
+  a.innerHTML = '<i class="ti ti-alert-circle"></i><span>'+msg+'</span>';
+  st.insertBefore(a, st.firstChild);
+  setTimeout(()=>{ if(a.parentNode) a.remove(); }, 5000);
+}
+
+function generateDocketId() {
+  const used = new Set([...jobs, ...submittedJobs].map(j=>j.id));
+  let n = jobs.length + submittedJobs.length + 1;
+  while(used.has('MCK-'+String(n).padStart(3,'0'))) n++;
+  return 'MCK-'+String(n).padStart(3,'0');
+}
+
+const STAGE_KEY_TO_NUM = { order: 1, delivery: 2, pickup: 3, disposal: 5 };
+const STAGE_KEY_TO_STEP = { order: 1, delivery: 2, pickup: 3, disposal: 4 };
+
+// Guards against duplicate submissions if the Save button is tapped more
+// than once (double-tap, slow network, impatient re-tapping) — without this,
+// each tap ran the full save independently and could re-upload photos and
+// duplicate the docket into the Submitted list.
+let _savingJob = false;
+const STAGE_SAVE_BTN = { order:'btn-save-order', delivery:'btn-save-delivery', pickup:'btn-save-pickup', disposal:'btn-save-disposal' };
+
+async function saveAndExit(stageKey) {
+  if(_savingJob) return;
+  _savingJob = true;
+  const btn = document.getElementById(STAGE_SAVE_BTN[stageKey]);
+  const label = document.getElementById(STAGE_SAVE_BTN[stageKey]+'-label');
+  const origLabel = label ? label.textContent : '';
+  if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  if(label) label.textContent = 'Saving…';
+  try {
+    const stepNum = STAGE_KEY_TO_STEP[stageKey];
+    // 'order' is a prefill stage — office can save without a signature so a driver can pick up later.
+    if(stageKey !== 'order' && !currentSigs[stageKey]) {
+      showInlineAlert(stepNum, 'Sign before you can save.');
+      const sigId = Object.keys(SIG_KEYS).find(k => SIG_KEYS[k] === stageKey);
+      const el = sigId && document.getElementById(sigId);
+      if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+      return;
+    }
+    // Order needs a client + location before it can be saved
+    if(stageKey === 'order') {
+      const clientVal = document.getElementById('f-client').value;
+      const siteVal = document.getElementById('f-location').value;
+      if(!clientVal) { showInlineAlert(1, 'Pick a client / folder first.'); return; }
+      if(!siteVal) { showInlineAlert(1, 'Enter a site / location.'); return; }
+      if(clientVal === 'General Skip Assignment') {
+        const ooEl = document.getElementById('f-oneoff-name');
+        if(!ooEl || !ooEl.value) { showInlineAlert(1, 'Enter the one-off client name.'); return; }
+      }
+    }
+    if(navigator.onLine === false) {
+      showToast('Offline — cannot save right now. Try again when you have signal.');
+      return;
+    }
+    const driver = getCurrentDriver();
+    const data = gatherFormData();
+
+    let job;
+    if(editingJobId) {
+      const idx = jobs.findIndex(j => j.id === editingJobId);
+      if(idx > -1) {
+        job = jobs[idx];
+        Object.assign(job, data);
+        const folderEntry = FOLDERS.find(f => f.name === data.client);
+        if(folderEntry) job.folder = folderEntry.id;
+      }
+    }
+    if(!job) {
+      const folderEntry = FOLDERS.find(f => f.name === data.client);
+      const newId = await generateDocketIdFromDB();
+      job = Object.assign({
+        id: newId,
+        folder: folderEntry ? folderEntry.id : 'general',
+        photos: {arr:[],pu:[],tip:[],rec:[]},
+        sigs: {}
+      }, data);
+      jobs.push(job);
+    }
+
+    job.sigs = job.sigs || {};
+    Object.keys(currentSigs).forEach(k => { job.sigs[k] = currentSigs[k]; });
+
+    job.stage = STAGE_KEY_TO_NUM[stageKey];
+    job.submittedBy = driver ? driver.name : (job.submittedBy || '');
+    if(stageKey === 'disposal') { job.submitted_at = new Date().toISOString(); job.submitted = fmtStamp(); }
+
+    // Persist to DB
+    const ok = await saveDocketToDB(job, stageKey);
+    if(!ok) {
+      // remove the just-pushed new job from local list so user can retry cleanly
+      if(!editingJobId) { const idx = jobs.findIndex(j => j.id === job.id); if(idx>-1) jobs.splice(idx, 1); }
+      return;
+    }
+    // Upload any buffered photos
+    await uploadDocketPhotos(job.id);
+
+    if(stageKey === 'disposal') {
+      const idx = jobs.findIndex(j => j.id === job.id);
+      if(idx > -1) jobs.splice(idx, 1);
+      submittedJobs.unshift(job);
+      renderDoneList();
+    }
+
+    showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.');
+
+    editingJobId = null;
+    const folderToReopen = job.folder;
+    resetForm();
+    if(stageKey === 'disposal') {
+      showTab('done');
+    } else {
+      showTab('jobs');
+      if(folderToReopen) openFolder(folderToReopen);
+    }
+  } finally {
+    _savingJob = false;
+    if(btn) { btn.disabled = false; btn.style.opacity = ''; }
+    if(label) label.textContent = origLabel;
+  }
+}
+
+// ── TOAST ──
+let _toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast'); if(!t) return;
+  t.textContent = msg; t.classList.add('show');
+  if(_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+</script>
+</body>
+</html>
