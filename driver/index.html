@@ -376,7 +376,7 @@ canvas{display:none}
             </div>
             <div class="field"><label>Waste type</label>
               <select id="f-wastetype">
-                <option>Construction</option><option>Concrete</option><option>Green Waste</option>
+                <option>Construction</option><option>Concrete</option><option>Green Waste</option><option>Fogo</option>
                 <option>Demolition (Building)</option><option>Steel/Metal</option><option>Timber</option>
                 <option>Domestic</option><option>Mixed</option><option>VENM</option><option>Hazardous</option>
               </select>
@@ -447,6 +447,7 @@ canvas{display:none}
             <div class="pct-f"><label>Concrete %</label><input type="number" id="pco" value="0" min="0" max="100" onchange="updPct()"></div>
             <div class="pct-f"><label>Demolition %</label><input type="number" id="pd" value="0" min="0" max="100" onchange="updPct()"></div>
             <div class="pct-f"><label>Green Waste %</label><input type="number" id="pg2" value="0" min="0" max="100" onchange="updPct()"></div>
+            <div class="pct-f"><label>Fogo %</label><input type="number" id="pf" value="0" min="0" max="100" onchange="updPct()"></div>
             <div class="pct-f"><label>Steel/Metal %</label><input type="number" id="ps" value="0" min="0" max="100" onchange="updPct()"></div>
             <div class="pct-f"><label>VENM %</label><input type="number" id="pv" value="0" min="0" max="100" onchange="updPct()"></div>
           </div>
@@ -736,7 +737,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-24.3';
+const APP_BUILD = 'build 2026-08-28.1';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -930,7 +931,7 @@ function continueJob(jobId) {
   selB.d = new Set(j.bins_del||[]);
   selB.p = new Set(j.bins_pu||[]);
   // Set pcts
-  if(j.pcts) { Object.entries({construction:'pc',concrete:'pco',demolition:'pd',green:'pg2',steel:'ps',venm:'pv'}).forEach(([k,id])=>{ const e=document.getElementById(id); if(e)e.value=j.pcts[k]||0; }); updPct(); }
+  if(j.pcts) { Object.entries({construction:'pc',concrete:'pco',demolition:'pd',green:'pg2',fogo:'pf',steel:'ps',venm:'pv'}).forEach(([k,id])=>{ const e=document.getElementById(id); if(e)e.value=j.pcts[k]||0; }); updPct(); }
   // Set sigs — normalise legacy boolean sigs to object form
   currentSigs = {};
   ['delivery','pickup','disposal'].forEach(stage => {
@@ -1002,7 +1003,7 @@ function editSubmittedJob(jobId) {
   if(j.cbm) document.getElementById('fcbm').value = j.cbm;
   selB.d = new Set(j.bins_del||[]);
   selB.p = new Set(j.bins_pu||[]);
-  if(j.pcts) { Object.entries({construction:'pc',concrete:'pco',demolition:'pd',green:'pg2',steel:'ps',venm:'pv'}).forEach(([k,id])=>{ const e=document.getElementById(id); if(e)e.value=j.pcts[k]||0; }); updPct(); }
+  if(j.pcts) { Object.entries({construction:'pc',concrete:'pco',demolition:'pd',green:'pg2',fogo:'pf',steel:'ps',venm:'pv'}).forEach(([k,id])=>{ const e=document.getElementById(id); if(e)e.value=j.pcts[k]||0; }); updPct(); }
   // Normalise legacy boolean sigs to object form, same as continueJob()
   currentSigs = {};
   ['delivery','pickup','disposal'].forEach(stage => {
@@ -1112,7 +1113,7 @@ function rt(z,tId){ const el=document.getElementById(tId); if(!el)return; const 
 function rb(e,z,n){ e.stopPropagation(); selB[z].delete(n); rg(z,'bg'+z,'bt'+z,document.getElementById('bs'+z)?.value||''); }
 
 function updPct() {
-  const ids=['pc','pco','pd','pg2','ps','pv'];
+  const ids=['pc','pco','pd','pg2','pf','ps','pv'];
   const tot=ids.reduce((s,id)=>{const e=document.getElementById(id);return s+(parseInt(e?.value||0)||0);},0);
   const el=document.getElementById('pt');
   if(el){el.textContent=tot+'%';el.style.color=tot===100?'#155724':tot>100?'#A32D2D':'#666';}
@@ -1252,7 +1253,7 @@ function resetForm() {
   ['f-client','f-location','f-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   ['fw','fcbm'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   ['f-bintype','f-wastetype','f-facility'].forEach(id=>{const e=document.getElementById(id);if(e)e.selectedIndex=0;});
-  ['pc','pco','pd','pg2','ps','pv'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=0;});
+  ['pc','pco','pd','pg2','pf','ps','pv'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=0;});
   document.getElementById('pt').textContent='0%';
   document.getElementById('va').classList.add('hidden');
   photos={arr:[],pu:[]};
@@ -1907,6 +1908,7 @@ function gatherFormData() {
       concrete:     parseInt(document.getElementById('pco')?.value||0)||0,
       demolition:   parseInt(document.getElementById('pd')?.value||0)||0,
       green:        parseInt(document.getElementById('pg2')?.value||0)||0,
+      fogo:         parseInt(document.getElementById('pf')?.value||0)||0,
       steel:        parseInt(document.getElementById('ps')?.value||0)||0,
       venm:         parseInt(document.getElementById('pv')?.value||0)||0
     },
