@@ -778,7 +778,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-29.2';
+const APP_BUILD = 'build 2026-08-29.3';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -1961,7 +1961,11 @@ function jobToRow(job, stageKey) {
     has_nc: !!job.has_nc,
     created_by: (currentDriver && currentDriver.id) || null,
     submitted_by: (currentDriver && currentDriver.id) || null,
-    submitted_at: job.submitted_at || (stageKey===  'disposal' ? new Date().toISOString() : null)
+    // Only stamp submitted_at once the docket has actually reached full completion
+    // (stage 5) — not just because this particular save happened to be a
+    // disposal-step save. A disposal-step DRAFT save (no signature yet) leaves
+    // job.stage at 4, so it correctly stays un-submitted here too.
+    submitted_at: job.submitted_at || ((job.stage||0) >= 5 ? new Date().toISOString() : null)
   };
 }
 
@@ -2302,15 +2306,13 @@ async function saveAndExit(stageKey) {
   if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   if(label) label.textContent = 'Saving…';
   try {
-    const stepNum = STAGE_KEY_TO_STEP[stageKey];
-    // 'order' is a prefill stage — office can save without a signature so a driver can pick up later.
-    if(stageKey !== 'order' && !currentSigs[stageKey]) {
-      showInlineAlert(stepNum, 'Sign before you can save.');
-      const sigId = Object.keys(SIG_KEYS).find(k => SIG_KEYS[k] === stageKey);
-      const el = sigId && document.getElementById(sigId);
-      if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
-      return;
-    }
+    // Whether this stage actually has its signature yet. A signature marks the
+    // stage as genuinely DONE; without one we still save everything that's been
+    // entered so far as a draft — no data should ever be lost just because a
+    // driver has to stop partway through a step (interrupted, out of signal,
+    // customer not available to sign yet, etc). 'order' has no signature at all
+    // and is always treated as complete once saved, same as before.
+    const hasSig = (stageKey === 'order') || !!currentSigs[stageKey];
     // Order needs a client + location before it can be saved
     if(stageKey === 'order') {
       const clientVal = document.getElementById('f-client').value;
@@ -2354,9 +2356,14 @@ async function saveAndExit(stageKey) {
     job.sigs = job.sigs || {};
     Object.keys(currentSigs).forEach(k => { job.sigs[k] = currentSigs[k]; });
 
-    job.stage = STAGE_KEY_TO_NUM[stageKey];
+    // Only advance the docket's stage (mark this step DONE) once it's actually
+    // signed. A draft save keeps the stage where it was, so re-opening the job
+    // brings you straight back to this same step with everything you've
+    // entered so far still filled in — nothing is lost either way.
+    if(hasSig) job.stage = STAGE_KEY_TO_NUM[stageKey];
+    else job.stage = job.stage || (STAGE_KEY_TO_NUM[stageKey] - 1);
     job.submittedBy = driver ? driver.name : (job.submittedBy || '');
-    if(stageKey === 'disposal') { job.submitted_at = new Date().toISOString(); job.submitted = fmtStamp(); }
+    if(stageKey === 'disposal' && hasSig) { job.submitted_at = new Date().toISOString(); job.submitted = fmtStamp(); }
 
     // Persist to DB
     const ok = await saveDocketToDB(job, stageKey);
@@ -2368,19 +2375,21 @@ async function saveAndExit(stageKey) {
     // Upload any buffered photos
     await uploadDocketPhotos(job.id);
 
-    if(stageKey === 'disposal') {
+    const stageDone = stageKey === 'disposal' && hasSig;
+    if(stageDone) {
       const idx = jobs.findIndex(j => j.id === job.id);
       if(idx > -1) jobs.splice(idx, 1);
       submittedJobs.unshift(job);
       renderDoneList();
     }
 
-    showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.');
+    if(hasSig) showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.');
+    else showToast('Saved — get a signature later to mark this step done.');
 
     editingJobId = null;
     const folderToReopen = job.folder;
     resetForm();
-    if(stageKey === 'disposal') {
+    if(stageDone) {
       showTab('done');
     } else {
       showTab('jobs');
