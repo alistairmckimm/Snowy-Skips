@@ -778,7 +778,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-29.1';
+const APP_BUILD = 'build 2026-08-29.2';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -1217,7 +1217,11 @@ function removeQuoteItem(i) {
 function updateQuoteItem(i, field, val) {
   if(!quoteItems[i]) return;
   quoteItems[i][field] = (field === 'price' || field === 'qty') ? (parseFloat(val) || 0) : val;
-  renderQuoteItems();
+  // Don't rebuild the input DOM on every keystroke (kills focus + drops the on-screen
+  // keyboard on mobile). Just patch this row's amount and the running total in place.
+  const amtEl = document.getElementById('qi-amt-' + i);
+  if(amtEl) amtEl.textContent = '$' + ((parseFloat(quoteItems[i].qty)||0) * (parseFloat(quoteItems[i].price)||0)).toFixed(2);
+  updateQuoteTotal();
 }
 
 // Line shape mirrors how these get re-keyed into Xero for the formal quote:
@@ -1231,7 +1235,7 @@ function renderQuoteItems() {
       '<input type="text" class="qi-desc" placeholder="e.g. Skip bin — base rate per m³" value="'+esc(item.desc||'')+'" oninput="updateQuoteItem('+i+',\'desc\',this.value)">'+
       '<input type="number" class="qi-qty" placeholder="Qty" step="1" min="0" value="'+(item.qty===0?0:(item.qty||1))+'" oninput="updateQuoteItem('+i+',\'qty\',this.value)">'+
       '<input type="number" class="qi-price" placeholder="$" step="0.01" min="0" value="'+(item.price||'')+'" oninput="updateQuoteItem('+i+',\'price\',this.value)">'+
-      '<span class="qi-amt">$'+amount.toFixed(2)+'</span>'+
+      '<span class="qi-amt" id="qi-amt-'+i+'">$'+amount.toFixed(2)+'</span>'+
       '<button type="button" class="qi-rm" onclick="removeQuoteItem('+i+')"><i class="ti ti-trash"></i></button>'+
     '</div>';
   }).join('');
