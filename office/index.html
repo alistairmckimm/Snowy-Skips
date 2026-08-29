@@ -1,0 +1,3423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Snowy Skips — Office</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--mc:#0a2240;--or:#e8611a;--tl:#1D9E75;--rd:#A32D2D;--am:#854F0B;--bg:#eef1f5;--card:#fff;--bd:#e3e6ec;--mt:#7b8494}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);font-size:13px;color:#1a1a1a;overflow:hidden}
+
+/* ── APP SHELL ── */
+.app{display:none;height:100vh;overflow:hidden}
+.app.shown{display:flex}
+
+/* ── SIDEBAR ── */
+.sb{width:220px;background:var(--mc);flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;color:#fff}
+.sb-top{padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px}
+.sb-logo{width:38px;height:38px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo i{font-size:22px;color:var(--mc)}
+.sb-name{font-size:13px;font-weight:700}
+.sb-sub{font-size:9px;color:rgba(255,255,255,0.55);margin-top:1px;letter-spacing:0.4px;text-transform:uppercase}
+.sb-nav{flex:1;overflow-y:auto;padding:10px 0}
+.sb-sec{font-size:9px;font-weight:700;color:rgba(255,255,255,0.32);text-transform:uppercase;letter-spacing:0.6px;padding:10px 14px 4px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:9px 14px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;border-left:3px solid transparent;user-select:none}
+.sb-item i{font-size:16px;flex-shrink:0}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,0.05)}
+.sb-item.active{color:#fff;background:rgba(255,255,255,0.1);border-left-color:var(--or)}
+.sb-badge{margin-left:auto;background:rgba(255,255,255,0.18);border-radius:20px;padding:1px 7px;font-size:9px;font-weight:600}
+.sb-footer{padding:11px 13px;border-top:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px;cursor:pointer}
+.sb-footer:hover{background:rgba(255,255,255,0.05)}
+.sb-av{width:30px;height:30px;border-radius:50%;background:var(--or);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.sb-un{font-size:12px;color:#fff;font-weight:500;line-height:1.1}
+.sb-role{font-size:9px;color:rgba(255,255,255,0.5);margin-top:2px;text-transform:uppercase;letter-spacing:0.4px}
+
+/* ── MAIN AREA ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{background:#fff;border-bottom:1px solid var(--bd);padding:0 18px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.tb-title{font-size:15px;font-weight:600;color:#1a1a1a}
+.tb-right{display:flex;align-items:center;gap:8px}
+.btn-p{background:var(--or);color:#fff;border:none;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.btn-p:hover{background:#c9501a}
+.btn-p.teal{background:var(--tl)}
+.btn-p.teal:hover{background:#188760}
+.btn-p.red{background:var(--rd)}
+.btn-p.red:hover{background:#7d2424}
+.btn-o{background:transparent;color:var(--mc);border:1px solid #d0d8e4;border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn-o:hover{background:#f0f4f8}
+.btn-s{background:#f2f2f7;color:#1a1a1a;border:1px solid var(--bd);border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn-s:hover{background:#e7e8ed}
+.btn-x{background:none;border:none;cursor:pointer;color:var(--mt);font-size:18px;padding:4px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-family:inherit}
+.btn-x:hover{background:#f0f4f8;color:var(--mc)}
+
+/* ── SCREENS ── */
+.scr{flex:1;overflow:hidden;display:none;flex-direction:column}
+.scr.active{display:flex}
+
+/* ── KANBAN ── */
+.kb-toolbar{padding:10px 18px;background:#fff;border-bottom:1px solid var(--bd);display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.kb-toolbar input,.kb-toolbar select{font-family:inherit;font-size:12px;padding:7px 10px;border:1px solid #d0d8e4;border-radius:7px;background:#fff;color:#1a1a1a;outline:none}
+.kb-toolbar input:focus,.kb-toolbar select:focus{border-color:var(--or)}
+.kb-toolbar label{font-size:11px;color:var(--mt);margin-right:2px}
+.kb{flex:1;overflow-x:auto;overflow-y:hidden;padding:14px;display:flex;gap:12px;align-items:stretch}
+.kb-col{flex:0 0 280px;background:#fafbfc;border:1px solid var(--bd);border-radius:11px;display:flex;flex-direction:column;overflow:hidden;min-height:0;max-height:100%}
+.kb-head{padding:10px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;background:#fff}
+.kb-head-t{font-size:11px;font-weight:700;color:var(--mc);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px}
+.kb-head-t i{font-size:14px}
+.kb-count{background:var(--mc);color:#fff;border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;min-width:22px;text-align:center}
+.kb-body{flex:1;overflow-y:auto;padding:9px 9px 14px;display:flex;flex-direction:column;gap:8px}
+.kb-empty{padding:18px 10px;text-align:center;color:#bbb;font-size:11px}
+.kb-empty i{font-size:22px;display:block;margin-bottom:5px}
+
+/* ── DOCKET CARD ── */
+.dcard{background:#fff;border:1px solid var(--bd);border-radius:9px;padding:10px 11px;cursor:pointer;transition:box-shadow .15s,transform .05s}
+.dcard:hover{box-shadow:0 2px 9px rgba(10,34,64,0.09);border-color:#b9c3d4}
+.dcard:active{transform:translateY(1px)}
+.dcard.has-nc{border-left:3px solid var(--rd)}
+.dc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px}
+.dc-id{font-size:10px;color:var(--mt);font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.dc-pill{font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px;background:#f0f4f8;color:var(--mc);text-transform:uppercase;letter-spacing:0.3px}
+.dc-pdf-btn{width:22px;height:22px;border-radius:6px;border:1px solid #c7e0f0;background:#eaf3fa;color:#1B6FA8;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;flex-shrink:0}
+.dc-pdf-btn:hover{background:#d9ecf8}
+.dc-client{font-size:13px;font-weight:700;color:var(--mc);margin-bottom:3px;line-height:1.2}
+.dc-site{font-size:11px;color:#555;margin-bottom:6px;line-height:1.3}
+.dc-meta{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.dc-tag{background:#f2f4f7;border-radius:5px;padding:2px 6px;font-size:10px;color:#444;display:inline-flex;align-items:center;gap:3px}
+.dc-tag i{font-size:10px;color:var(--mt)}
+.dc-foot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #f0f2f5;padding-top:6px;margin-top:4px}
+.dc-sub{font-size:10px;color:var(--mt)}
+.dc-sigs{display:flex;gap:3px}
+.dc-sig{width:7px;height:7px;border-radius:50%;background:#dde2eb}
+.dc-sig.on{background:var(--tl)}
+
+/* ── TABLE ── */
+.tbl-wrap{flex:1;overflow:auto;padding:14px 18px}
+table.t{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--bd);border-radius:10px;overflow:hidden;font-size:12px}
+table.t thead{background:#f7f9fc}
+table.t th{text-align:left;padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--mt);font-weight:700;border-bottom:1px solid var(--bd)}
+table.t td{padding:10px 12px;border-bottom:1px solid #f0f2f5;color:#1a1a1a;vertical-align:middle}
+table.t tbody tr:last-child td{border-bottom:none}
+table.t tbody tr:hover{background:#f7f9fc}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.pill.green{background:#dff7ec;color:#155724}
+.pill.grey{background:#f0f0f0;color:#555}
+.pill.blue{background:#e6f0fb;color:#0c447c}
+.pill.orange{background:#fde8d8;color:#7d3000}
+.pill.red{background:#fbe1e0;color:#7d2424}
+
+/* ── DRAWER ── */
+.drawer-bk{position:fixed;inset:0;background:rgba(10,34,64,0.4);z-index:80;display:none}
+.drawer-bk.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;max-width:96vw;background:#fff;z-index:81;box-shadow:-6px 0 30px rgba(0,0,0,0.18);transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column}
+.drawer.on{transform:translateX(0)}
+.dr-head{padding:14px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--mc);color:#fff;flex-shrink:0}
+.dr-head h3{font-size:14px;font-weight:700;line-height:1.2}
+.dr-head .sub{font-size:10px;color:rgba(255,255,255,0.65);margin-top:2px}
+.dr-head .btn-x{color:#fff}
+.dr-head .btn-x:hover{background:rgba(255,255,255,0.13);color:#fff}
+.dr-body{flex:1;overflow-y:auto;padding:14px 18px}
+.dr-tabs{display:flex;gap:0;border-bottom:1px solid var(--bd);background:#f7f9fc;flex-shrink:0}
+.dr-tab{flex:1;padding:9px;font-size:11px;font-weight:600;color:var(--mt);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;text-transform:uppercase;letter-spacing:0.3px}
+.dr-tab.active{color:var(--mc);border-bottom-color:var(--or)}
+.dr-tab:hover{color:var(--mc)}
+.dr-pane{display:none}
+.dr-pane.active{display:block}
+.dr-sect{margin-bottom:18px}
+.dr-sect-t{font-size:10px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.dr-sect-t i{font-size:13px}
+.dr-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dr-field{margin-bottom:8px}
+.dr-field label{font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:0.3px;display:block;margin-bottom:2px}
+.dr-field .v{font-size:13px;color:#1a1a1a;padding:7px 10px;background:#f7f9fc;border-radius:7px;border:1px solid #e7eaf0;min-height:32px;word-break:break-word}
+.dr-field input[type=date],.dr-field input[type=time]{width:100%;box-sizing:border-box;font-size:13px;font-family:inherit;padding:6px 9px;border-radius:7px;border:1px solid #cfd6e0;background:#fff}
+.dr-edit-bar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}
+.quote-toggle{display:flex;align-items:center;gap:9px;background:#f7f9fc;border:1px solid #e7eaf0;border-radius:9px;padding:10px 12px;margin-bottom:10px;cursor:pointer}
+.quote-toggle input{width:16px;height:16px;flex-shrink:0}
+.quote-toggle span{font-size:12px;font-weight:600;color:#444}
+.qi-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.qi-row input.qi-desc{flex:1 1 100%;min-width:0;padding:7px 9px;border:1px solid #cfd6e0;border-radius:7px;font-size:12px}
+.qi-row input.qi-qty{width:52px;text-align:right;padding:7px 7px;border:1px solid #cfd6e0;border-radius:7px;font-size:12px}
+.qi-row input.qi-price{width:72px;text-align:right;padding:7px 7px;border:1px solid #cfd6e0;border-radius:7px;font-size:12px}
+.qi-row .qi-amt{font-size:12px;font-weight:700;color:#155724;min-width:56px;text-align:right}
+.qi-row button.qi-rm{width:28px;height:28px;flex-shrink:0;border-radius:7px;border:1px solid #e0b8b8;background:#fff5f5;color:#a33;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.qi-add{background:transparent;color:var(--mc);border:1.5px dashed var(--mc);border-radius:8px;padding:8px;font-size:12px;font-weight:600;width:100%;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:2px}
+.qi-total{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:9px 11px;border-radius:8px;background:#eef7f2;border:1px solid #c9e6d6}
+.qi-total b{font-size:15px;color:#155724}
+.dr-actions{display:flex;flex-direction:column;gap:6px;padding:12px 18px;border-top:1px solid var(--bd);background:#fafbfc;flex-shrink:0}
+.dr-actions .row{display:flex;gap:6px}
+.dr-actions .row button{flex:1;justify-content:center}
+.sig-block{background:#fff;border:1px dashed #c8d0db;border-radius:8px;padding:9px;text-align:center;margin-bottom:8px}
+.sig-block img{max-width:100%;max-height:80px;display:block;margin:0 auto 5px}
+.sig-block .sm{font-size:10px;color:var(--mt)}
+.ph-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.ph-tile{aspect-ratio:1;background:#f0f2f5;border-radius:7px;overflow:hidden;cursor:pointer;position:relative;border:1px solid var(--bd)}
+.ph-tile img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-tile:hover{border-color:var(--or)}
+.audit-row{padding:8px 0;border-bottom:1px solid #f0f2f5;font-size:11px}
+.audit-row:last-child{border:none}
+.audit-row .a-when{color:var(--mt);font-size:10px;margin-bottom:2px}
+.audit-row .a-action{font-weight:600;color:var(--mc)}
+.audit-row .a-who{color:#555;margin-left:6px}
+.audit-row .a-notes{margin-top:3px;color:#555;font-size:11px;font-style:italic}
+
+/* ── MODAL ── */
+.mdl-bk{position:fixed;inset:0;background:rgba(10,34,64,0.55);z-index:90;display:none;align-items:center;justify-content:center;padding:20px}
+.mdl-bk.on{display:flex}
+.mdl{background:#fff;border-radius:12px;width:100%;max-width:430px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.mdl-head{padding:14px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;background:var(--mc);color:#fff}
+.mdl-head h3{font-size:14px;font-weight:700}
+.mdl-head .btn-x{color:#fff}
+.mdl-body{padding:16px 18px;overflow-y:auto;flex:1}
+.mdl-foot{padding:12px 18px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end;background:#fafbfc}
+.fld{margin-bottom:11px}
+.fld label{font-size:11px;color:#555;display:block;margin-bottom:3px;font-weight:500}
+.fld input,.fld select,.fld textarea{width:100%;padding:9px 11px;border:1px solid #d0d8e4;border-radius:7px;font-family:inherit;font-size:13px;background:#fff;color:#1a1a1a;outline:none}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--or)}
+.fld textarea{resize:vertical;min-height:70px}
+.fld-row{display:flex;gap:9px}
+.fld-row .fld{flex:1}
+.wt-grid{display:flex;flex-wrap:wrap;gap:6px}
+.wt-btn{border:1px solid #d0d8e4;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;background:#fff;color:#1a1a1a;font-family:inherit}
+.wt-btn.sel{background:var(--mc);color:#fff;border-color:var(--mc)}
+.chk{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin:6px 0}
+.chk input{width:auto}
+.err{color:var(--rd);font-size:11px;margin-top:5px;display:none}
+.err.show{display:block}
+
+/* ── LOGIN OVERLAY ── */
+.lo{position:fixed;inset:0;background:linear-gradient(160deg,#0a2240 0%,#1a3a6b 100%);z-index:300;display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto}
+.lo.hidden{display:none}
+.lo-card{background:#fff;border-radius:14px;padding:0;width:100%;max-width:420px;overflow:hidden;box-shadow:0 14px 50px rgba(0,0,0,0.25)}
+.lo-head{padding:22px 22px 16px;text-align:center;background:#fff}
+.lo-logo{width:60px;height:60px;background:var(--mc);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
+.lo-logo i{font-size:34px;color:#fff}
+.lo-title{font-size:18px;font-weight:700;color:var(--mc)}
+.lo-sub{font-size:11px;color:var(--mt);margin-top:3px;text-transform:uppercase;letter-spacing:0.5px}
+.lo-tabs{display:flex;background:#fafbfc;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)}
+.lo-tab{flex:1;padding:11px;font-size:12px;font-weight:600;color:var(--mt);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit}
+.lo-tab.active{color:var(--mc);border-bottom-color:var(--or);background:#fff}
+.lo-pane{padding:18px 22px 22px;display:none}
+.lo-pane.active{display:block}
+.lo-pane button.btn-p{width:100%;justify-content:center;padding:11px;font-size:13px;margin-top:6px}
+
+/* ── TOAST ── */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:var(--mc);color:#fff;padding:10px 18px;border-radius:25px;font-size:12px;font-weight:500;z-index:500;box-shadow:0 6px 24px rgba(0,0,0,0.22);transition:transform .22s ease;max-width:90vw;text-align:center}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ── ACCOUNT MENU ── */
+.acct-bk{position:fixed;inset:0;background:rgba(0,0,0,0.25);z-index:75;display:none}
+.acct-bk.on{display:block}
+.acct{position:fixed;bottom:14px;left:14px;width:240px;background:#fff;border-radius:11px;box-shadow:0 6px 30px rgba(0,0,0,0.2);z-index:76;padding:13px;display:none;border:1px solid var(--bd)}
+.acct.on{display:block}
+.acct-name{font-size:13px;font-weight:700;color:var(--mc)}
+.acct-em{font-size:11px;color:var(--mt);margin-top:2px;word-break:break-all}
+.acct hr{border:none;border-top:1px solid var(--bd);margin:10px 0}
+.acct button{width:100%;justify-content:center}
+
+/* ── COMPLIANCE ── */
+.cmp-form{display:flex;flex-direction:column;gap:10px}
+.cmp-form .fld{margin-bottom:0}
+.cmp-readonly{font-size:12px;color:#1a1a1a;padding:7px 10px;background:#f7f9fc;border-radius:7px;border:1px solid #e7eaf0;min-height:32px;display:flex;align-items:center}
+.cmp-mini{margin-top:14px;padding-top:12px;border-top:1px dashed #e3e6ec}
+.cmp-mini-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cmp-mini-h .lbl{font-size:10px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:5px}
+.cmp-row{background:#fafbfc;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:11px}
+.cmp-row-top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.cmp-row-desc{color:#1a1a1a;font-weight:500;font-size:12px;margin-bottom:3px;line-height:1.35}
+.cmp-row-meta{color:var(--mt);font-size:10px;margin-top:4px}
+.iso-clause{display:inline-block;background:#eef0f3;color:#555;font-family:ui-monospace,Menlo,monospace;font-size:10px;padding:1px 6px;border-radius:4px}
+.pill.yellow{background:#fef3c7;color:#854F0B}
+.pill.minor{background:#fef3c7;color:#854F0B}
+.pill.major{background:#fbe1e0;color:#7d2424}
+.pill.observation{background:#f0f0f0;color:#555}
+.pill.compliant{background:#dff7ec;color:#155724}
+.pill.inprogress{background:#e6f0fb;color:#0c447c}
+.find-row{background:#fafbfc;border:1px solid var(--bd);border-radius:7px;padding:9px;margin-bottom:7px;display:flex;flex-direction:column;gap:6px}
+.find-row .fld{margin-bottom:0}
+.find-row .fr-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.find-row .fr-rm{background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px;padding:2px 5px;font-family:inherit}
+.find-row .fr-rm:hover{background:#fbe1e0;border-radius:5px}
+.cmp-empty{padding:14px;text-align:center;color:var(--mt);font-size:11px;font-style:italic}
+
+/* small screens */
+@media(max-width:900px){
+  .sb{width:60px}
+  .sb-top{padding:12px 8px;justify-content:center}
+  .sb-name,.sb-sub{display:none}
+  .sb-item{justify-content:center;padding:11px 4px}
+  .sb-item span{display:none}
+  .sb-sec{display:none}
+  .sb-badge{display:none}
+  .sb-footer{justify-content:center;padding:11px 4px}
+  .sb-un,.sb-role{display:none}
+  .drawer{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ── APP ── -->
+<div class="app" id="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sb">
+    <div class="sb-top">
+      <div class="sb-logo"><i class="ti ti-snowflake"></i></div>
+      <div>
+        <div class="sb-name">Snowy Skips</div>
+        <div class="sb-sub">Office</div>
+      </div>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-sec">Workspace</div>
+      <div class="sb-item active" id="nav-dockets" onclick="showScreen('dockets')"><i class="ti ti-clipboard-list"></i><span>Dockets</span><span class="sb-badge" id="bdg-dockets">0</span></div>
+      <div class="sb-item" id="nav-clients" onclick="showScreen('clients')"><i class="ti ti-building"></i><span>Clients</span></div>
+      <div class="sb-item" id="nav-drivers" onclick="showScreen('drivers')"><i class="ti ti-users"></i><span>Drivers</span></div>
+      <div class="sb-sec">Compliance</div>
+      <div class="sb-item" id="nav-ncrs" onclick="showScreen('ncrs')"><i class="ti ti-alert-triangle"></i><span>Nonconformances</span><span class="sb-badge" id="bdg-ncrs">0</span></div>
+      <div class="sb-item" id="nav-venm" onclick="showScreen('venm')"><i class="ti ti-certificate"></i><span>VENM certificates</span></div>
+      <div class="sb-item" id="nav-iso" onclick="showScreen('iso')"><i class="ti ti-clipboard-check"></i><span>ISO audits</span></div>
+      <div class="sb-sec">Reports</div>
+      <div class="sb-item" id="nav-audit" onclick="showScreen('audit')"><i class="ti ti-history"></i><span>Audit log</span></div>
+      <div class="sb-item" id="nav-settings" onclick="showScreen('settings')"><i class="ti ti-settings"></i><span>Settings</span></div>
+    </nav>
+    <div class="sb-footer" id="sb-footer" onclick="toggleAccount()">
+      <div class="sb-av" id="sb-av">?</div>
+      <div>
+        <div class="sb-un" id="sb-un">—</div>
+        <div class="sb-role" id="sb-role">office</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="tb-title" id="tb-title">Dockets</div>
+      <div class="tb-right" id="tb-right"></div>
+    </div>
+
+    <!-- DOCKETS SCREEN -->
+    <section class="scr active" id="scr-dockets">
+      <div class="kb-toolbar">
+        <label>Client</label>
+        <select id="fl-client"><option value="">All clients</option></select>
+        <label>From</label>
+        <input type="date" id="fl-from">
+        <label>To</label>
+        <input type="date" id="fl-to">
+        <input type="text" id="fl-search" placeholder="Search ID, bin, site…" style="flex:1;min-width:150px;max-width:280px">
+        <button class="btn-s" onclick="clearFilters()"><i class="ti ti-filter-off"></i> Clear</button>
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="refreshDockets()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p teal" onclick="openNewDocket()"><i class="ti ti-plus"></i> New docket</button>
+      </div>
+      <div class="kb" id="kb"></div>
+    </section>
+
+    <!-- CLIENTS SCREEN -->
+    <section class="scr" id="scr-clients">
+      <div class="kb-toolbar">
+        <label class="chk" style="margin:0"><input type="checkbox" id="cl-showArchived"> Show archived</label>
+        <span style="flex:1"></span>
+        <button class="btn-p" onclick="openClientModal()"><i class="ti ti-plus"></i> Add client</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="cl-tbl">
+          <thead><tr><th>Name</th><th>Contact</th><th>Short code</th><th>Icon</th><th>Type</th><th>Status</th><th>Created</th><th style="width:130px">Actions</th></tr></thead>
+          <tbody id="cl-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DRIVERS SCREEN -->
+    <section class="scr" id="scr-drivers">
+      <div class="kb-toolbar">
+        <label class="chk" style="margin:0"><input type="checkbox" id="dr-showInactive"> Show inactive</label>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:var(--mt)">Drivers register themselves via the driver app.</span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="dr-tbl">
+          <thead><tr><th>Name</th><th>Phone</th><th>Role</th><th>Active</th><th>Signature</th><th>Created</th><th style="width:110px">Actions</th></tr></thead>
+          <tbody id="dr-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- AUDIT SCREEN -->
+    <section class="scr" id="scr-audit">
+      <div class="kb-toolbar">
+        <label>Action</label>
+        <select id="al-action">
+          <option value="">All actions</option>
+          <option value="created">Created</option>
+          <option value="signed">Signed</option>
+          <option value="reopened">Reopened</option>
+          <option value="invoiced">Invoiced</option>
+          <option value="moved">Moved</option>
+        </select>
+        <label>Driver</label>
+        <select id="al-driver"><option value="">All drivers</option></select>
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="loadAuditLog()"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="al-tbl">
+          <thead><tr><th style="width:160px">When</th><th>Who</th><th>Action</th><th>Docket</th><th>Notes</th></tr></thead>
+          <tbody id="al-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- NCRS SCREEN -->
+    <section class="scr" id="scr-ncrs">
+      <div class="kb-toolbar">
+        <label>Status</label>
+        <select id="nc-status">
+          <option value="">All</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+        <input type="text" id="nc-search" placeholder="Search docket ID, description…" style="flex:1;min-width:160px;max-width:300px">
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="loadNCRs()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p" onclick="openNCRPanel()"><i class="ti ti-plus"></i> Raise NC</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="nc-tbl">
+          <thead><tr><th style="width:72px">NC #</th><th style="width:74px">Status</th><th>Docket</th><th>Stage</th><th>Description</th><th>Corrective action</th><th>Responsible</th><th style="width:120px">Created</th></tr></thead>
+          <tbody id="nc-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VENM SCREEN -->
+    <section class="scr" id="scr-venm">
+      <div class="kb-toolbar">
+        <input type="text" id="vn-search" placeholder="Search cert#, docket, lab…" style="flex:1;min-width:160px;max-width:300px">
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="loadVENM()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p" onclick="openVENMPanel()"><i class="ti ti-plus"></i> Add VENM cert</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="vn-tbl">
+          <thead><tr><th style="width:72px">Cert #</th><th>Docket</th><th>Cert number</th><th>NATA lab</th><th>Lab ref</th><th>Test date</th><th style="width:80px">Image</th></tr></thead>
+          <tbody id="vn-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ISO SCREEN -->
+    <section class="scr" id="scr-iso">
+      <div class="kb-toolbar">
+        <input type="text" id="is-search" placeholder="Search title, auditor…" style="flex:1;min-width:160px;max-width:300px">
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="loadISO()"><i class="ti ti-refresh"></i> Refresh</button>
+        <button class="btn-p" onclick="openISOPanel()"><i class="ti ti-plus"></i> New audit</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t" id="is-tbl">
+          <thead><tr><th style="width:80px">Audit #</th><th style="width:110px">Date</th><th>Title</th><th>Auditor</th><th>Scope</th><th style="width:110px">Status</th><th style="width:80px">Findings</th></tr></thead>
+          <tbody id="is-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SETTINGS SCREEN -->
+    <section class="scr" id="scr-settings">
+      <div class="tbl-wrap">
+        <div style="max-width:640px">
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+            <h3 style="font-size:13px;font-weight:700;color:var(--mc);margin-bottom:10px">Workspace</h3>
+            <div class="dr-grid">
+              <div class="dr-field"><label>Company</label><div class="v">McKimm Civil Pty Ltd</div></div>
+              <div class="dr-field"><label>Trading as</label><div class="v">Snowy Skips</div></div>
+              <div class="dr-field"><label>Region</label><div class="v">Snowy Mountains, NSW</div></div>
+              <div class="dr-field"><label>Time zone</label><div class="v">AEST (UTC+10:00)</div></div>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+            <h3 style="font-size:13px;font-weight:700;color:var(--mc);margin-bottom:8px">Workflow stages</h3>
+            <p style="font-size:11px;color:var(--mt);margin-bottom:9px">The 6 columns shown on the docket board map to <code>dockets.stage</code> 1 → 6.</p>
+            <div style="display:flex;flex-direction:column;gap:5px;font-size:12px">
+              <div><strong>1 — Order received</strong> <span style="color:var(--mt)">order created, awaiting delivery</span></div>
+              <div><strong>2 — Skip Bin delivery</strong> <span style="color:var(--mt)">driver signed delivery</span></div>
+              <div><strong>3 — Waste Pickup</strong> <span style="color:var(--mt)">driver signed pickup</span></div>
+              <div><strong>4 — Waste Disposal</strong> <span style="color:var(--mt)">awaiting completion</span></div>
+              <div><strong>5 — Completion</strong> <span style="color:var(--mt)">driver signed disposal</span></div>
+              <div><strong>6 — Invoice</strong> <span style="color:var(--mt)">office marked invoiced</span></div>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+            <h3 style="font-size:13px;font-weight:700;color:var(--mc);margin-bottom:8px">Reset workflow / reopen</h3>
+            <p style="font-size:11px;color:var(--mt);line-height:1.5">Open any docket and use the actions panel at the bottom of the drawer to reset all signatures or reopen a single stage. Both require a reason and are written to the audit log per ISO 14001:2026 clause 6.3.</p>
+          </div>
+          <button class="btn-p red" onclick="doSignOut()"><i class="ti ti-logout"></i> Sign out</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- DRAWER -->
+<div class="drawer-bk" id="dr-bk" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="dr-head">
+    <div>
+      <h3 id="dr-title">Docket</h3>
+      <div class="sub" id="dr-sub">—</div>
+    </div>
+    <button class="btn-x" onclick="closeDrawer()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-tabs">
+    <button class="dr-tab active" data-tab="details" onclick="drTab('details')">Details</button>
+    <button class="dr-tab" data-tab="sigs" onclick="drTab('sigs')">Signatures</button>
+    <button class="dr-tab" data-tab="photos" onclick="drTab('photos')">Photos</button>
+    <button class="dr-tab" data-tab="compliance" onclick="drTab('compliance')">Compliance</button>
+    <button class="dr-tab" data-tab="audit" onclick="drTab('audit')">Audit</button>
+  </div>
+  <div class="dr-body">
+    <div class="dr-pane active" id="dp-details"></div>
+    <div class="dr-pane" id="dp-sigs"></div>
+    <div class="dr-pane" id="dp-photos"></div>
+    <div class="dr-pane" id="dp-compliance"></div>
+    <div class="dr-pane" id="dp-audit"></div>
+  </div>
+  <div class="dr-actions" id="dr-actions"></div>
+</aside>
+
+<!-- NEW DOCKET PANEL -->
+<div class="drawer-bk" id="nd-bk" onclick="closeNewDocket()"></div>
+<aside class="drawer" id="nd-drawer">
+  <div class="dr-head">
+    <div>
+      <h3><i class="ti ti-plus"></i> New docket</h3>
+      <div class="sub">Create an order at stage 1 — awaiting delivery</div>
+    </div>
+    <button class="btn-x" onclick="closeNewDocket()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="nd-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Client / folder *</label>
+      <select id="nd-client"><option value="">— Select client —</option></select>
+    </div>
+    <div id="nd-oneoff-block" style="display:none;background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:11px">
+      <div style="font-size:10px;font-weight:700;color:#854F0B;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">One-off client details</div>
+      <div class="fld"><label>Client name *</label><input type="text" id="nd-oneoff-name" placeholder="e.g. Sarah Johnson"></div>
+      <div class="fld" style="margin-bottom:0"><label>Contact (phone or email)</label><input type="text" id="nd-oneoff-contact" placeholder="e.g. 0412 345 678"></div>
+    </div>
+    <div class="fld">
+      <label>Site / location *</label>
+      <input type="text" id="nd-site" placeholder="e.g. 12 Bordeaux St, Berridale">
+    </div>
+    <div class="fld">
+      <label>Date</label>
+      <input type="date" id="nd-date">
+    </div>
+    <div class="fld">
+      <label>Bin type</label>
+      <select id="nd-bintype">
+        <option>Skip Bin</option>
+        <option>Concrete Washout</option>
+        <option>IBC</option>
+        <option>Truck Body</option>
+        <option>Bulka Bag</option>
+        <option>Trailer 8x5</option>
+      </select>
+    </div>
+    <div class="fld">
+      <label>Waste type <span style="font-weight:400;color:var(--mt)">— tap all that apply</span></label>
+      <div class="wt-grid" id="nd-wt-grid"></div>
+    </div>
+    <div class="fld">
+      <label>Comments (optional)</label>
+      <textarea id="nd-comments" placeholder="Anything the driver should know…"></textarea>
+    </div>
+    <label class="quote-toggle"><input type="checkbox" id="nd-is-quote" onchange="toggleNdQuoteTray()"><span>This is a quotation — no bin booked yet</span></label>
+    <div id="nd-quote-tray" style="display:none">
+      <div class="fld" style="margin-bottom:6px"><label>Quote items</label></div>
+      <div id="nd-qi-list"></div>
+      <button type="button" class="qi-add" onclick="addNdQuoteItem()"><i class="ti ti-plus"></i> Add item</button>
+      <div class="qi-total"><span style="font-size:11px;color:#666">Total (excl. GST)</span><b id="nd-qi-total-v">$0.00</b></div>
+      <div class="fld" style="margin-top:10px">
+        <label>Notes for the client (optional)</label>
+        <textarea id="nd-quote-notes" placeholder="e.g. quote validity period, access conditions"></textarea>
+      </div>
+      <div class="fld">
+        <label>Site photos (optional)</label>
+        <input type="file" id="nd-quote-photos" accept="image/*" multiple onchange="renderNdQuotePhotoCount()">
+        <div id="nd-quote-photo-count" style="font-size:10px;color:#888;margin-top:4px"></div>
+      </div>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeNewDocket()">Cancel</button>
+      <button class="btn-p teal" id="nd-save" onclick="saveNewDocket()"><i class="ti ti-device-floppy"></i> <span id="nd-save-lbl">Save order</span></button>
+    </div>
+  </div>
+</aside>
+
+<!-- NCR PANEL (raise/edit nonconformance) -->
+<div class="drawer-bk" id="nc-bk" onclick="closeNCRPanel()"></div>
+<aside class="drawer" id="nc-drawer">
+  <div class="dr-head">
+    <div>
+      <h3 id="nc-title"><i class="ti ti-alert-triangle"></i> Raise nonconformance</h3>
+      <div class="sub" id="nc-sub">ISO 14001:2026 clause 10.2 — corrective action</div>
+    </div>
+    <button class="btn-x" onclick="closeNCRPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="nc-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Docket *</label>
+      <select id="nc-docket"><option value="">— Select docket —</option></select>
+    </div>
+    <div class="fld">
+      <label>Stage *</label>
+      <select id="nc-stage">
+        <option value="order">Order</option>
+        <option value="delivery">Delivery</option>
+        <option value="pickup">Pickup</option>
+        <option value="disposal">Disposal</option>
+      </select>
+    </div>
+    <div class="fld">
+      <label>Description *</label>
+      <textarea id="nc-desc" placeholder="What happened? What didn't conform?"></textarea>
+    </div>
+    <div class="fld">
+      <label>Corrective action</label>
+      <textarea id="nc-correct" placeholder="What corrective action will be taken?"></textarea>
+    </div>
+    <div class="fld">
+      <label>Responsible person</label>
+      <input type="text" id="nc-resp" placeholder="e.g. Sarah Jones">
+    </div>
+    <div class="fld" id="nc-status-fld" style="display:none">
+      <label>Status</label>
+      <select id="nc-stat">
+        <option value="open">Open</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeNCRPanel()">Cancel</button>
+      <button class="btn-p teal" id="nc-save" onclick="saveNCR()"><i class="ti ti-device-floppy"></i> <span id="nc-save-lbl">Save NC</span></button>
+    </div>
+    <div class="row" id="nc-close-row" style="display:none">
+      <button class="btn-p red" onclick="closeNCRRecord()"><i class="ti ti-check"></i> Close this NC</button>
+    </div>
+  </div>
+</aside>
+
+<!-- VENM PANEL -->
+<div class="drawer-bk" id="vn-bk" onclick="closeVENMPanel()"></div>
+<aside class="drawer" id="vn-drawer">
+  <div class="dr-head">
+    <div>
+      <h3><i class="ti ti-certificate"></i> <span id="vn-title">Add VENM certificate</span></h3>
+      <div class="sub">NATA-accredited test record — Virgin Excavated Natural Material</div>
+    </div>
+    <button class="btn-x" onclick="closeVENMPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="vn-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Docket *</label>
+      <select id="vn-docket"><option value="">— Select docket —</option></select>
+    </div>
+    <div class="fld">
+      <label>Certificate number *</label>
+      <input type="text" id="vn-cert" placeholder="e.g. NATA-2026-00123">
+    </div>
+    <div class="fld">
+      <label>NATA accredited lab *</label>
+      <input type="text" id="vn-lab" placeholder="e.g. Eurofins Environment Testing">
+    </div>
+    <div class="fld">
+      <label>Lab reference</label>
+      <input type="text" id="vn-ref" placeholder="e.g. EU-25-09876">
+    </div>
+    <div class="fld">
+      <label>Test date *</label>
+      <input type="date" id="vn-date">
+    </div>
+    <div class="fld">
+      <label>Certificate image (optional)</label>
+      <input type="file" id="vn-img" accept="image/*">
+      <div id="vn-img-existing" style="font-size:11px;color:var(--mt);margin-top:5px"></div>
+    </div>
+    <div class="fld">
+      <label>Notes</label>
+      <textarea id="vn-notes" placeholder="Any extra notes…"></textarea>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeVENMPanel()">Cancel</button>
+      <button class="btn-p teal" id="vn-save" onclick="saveVENM()"><i class="ti ti-device-floppy"></i> <span id="vn-save-lbl">Save cert</span></button>
+    </div>
+  </div>
+</aside>
+
+<!-- ISO AUDIT PANEL -->
+<div class="drawer-bk" id="is-bk" onclick="closeISOPanel()"></div>
+<aside class="drawer" id="is-drawer" style="width:640px">
+  <div class="dr-head">
+    <div>
+      <h3><i class="ti ti-clipboard-check"></i> <span id="is-title">New ISO 14001 audit</span></h3>
+      <div class="sub">Internal audit — ISO 14001:2026 clause 9.2</div>
+    </div>
+    <button class="btn-x" onclick="closeISOPanel()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="dr-body">
+    <div class="err" id="is-err" style="margin-bottom:10px"></div>
+    <div class="fld">
+      <label>Title *</label>
+      <input type="text" id="is-title-in" placeholder="e.g. Q3 2026 Internal Audit">
+    </div>
+    <div class="fld-row">
+      <div class="fld">
+        <label>Audit date *</label>
+        <input type="date" id="is-date">
+      </div>
+      <div class="fld">
+        <label>Auditor name *</label>
+        <input type="text" id="is-auditor" placeholder="e.g. Alistair McKimm">
+      </div>
+    </div>
+    <div class="fld">
+      <label>Scope</label>
+      <textarea id="is-scope" placeholder="What was audited? Which processes / clauses?"></textarea>
+    </div>
+    <div class="fld">
+      <label>Overall status</label>
+      <select id="is-status">
+        <option value="in_progress">In progress</option>
+        <option value="compliant">Compliant</option>
+        <option value="minor_nc">Minor NC</option>
+        <option value="major_nc">Major NC</option>
+      </select>
+    </div>
+    <div class="cmp-mini" style="border-top:none;margin-top:6px;padding-top:0">
+      <div class="cmp-mini-h">
+        <span class="lbl"><i class="ti ti-list-check"></i> Findings</span>
+        <button class="btn-s" onclick="addFinding()"><i class="ti ti-plus"></i> Add finding</button>
+      </div>
+      <div id="is-findings"></div>
+    </div>
+  </div>
+  <div class="dr-actions">
+    <div class="row">
+      <button class="btn-s" onclick="closeISOPanel()">Cancel</button>
+      <button class="btn-p teal" id="is-save" onclick="saveISO()"><i class="ti ti-device-floppy"></i> <span id="is-save-lbl">Save audit</span></button>
+    </div>
+    <div class="row" id="is-close-row" style="display:none">
+      <button class="btn-p" onclick="markISOClosed()"><i class="ti ti-check"></i> Mark audit closed</button>
+    </div>
+  </div>
+</aside>
+
+<!-- CLIENT MODAL -->
+<div class="mdl-bk" id="cm-bk">
+  <div class="mdl">
+    <div class="mdl-head"><h3 id="cm-title">Add client</h3><button class="btn-x" onclick="closeClientModal()"><i class="ti ti-x"></i></button></div>
+    <div class="mdl-body">
+      <div class="fld"><label>Name *</label><input type="text" id="cm-name" placeholder="e.g. Acme Builders"></div>
+      <div class="fld"><label>Contact (phone or email)</label><input type="text" id="cm-contact" placeholder="e.g. 0412 345 678"></div>
+      <div class="fld"><label>Short code *</label><input type="text" id="cm-code" placeholder="e.g. acme — lowercase, no spaces"></div>
+      <div id="cm-convert-note" style="display:none;background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 8px 8px 0;padding:8px 10px;font-size:11px;color:#633806;margin-bottom:10px"></div>
+      <div class="fld"><label>Icon</label>
+        <select id="cm-icon">
+          <option value="ti-building">Building</option>
+          <option value="ti-building-skyscraper">Skyscraper</option>
+          <option value="ti-building-community">Community</option>
+          <option value="ti-warehouse">Warehouse</option>
+          <option value="ti-home">Home</option>
+          <option value="ti-home-2">Home 2</option>
+          <option value="ti-crane">Crane</option>
+          <option value="ti-briefcase">Briefcase</option>
+          <option value="ti-user">Person</option>
+          <option value="ti-bed">Hotel</option>
+          <option value="ti-tree">Tree</option>
+          <option value="ti-mountain">Mountain</option>
+          <option value="ti-folder-open">Folder</option>
+          <option value="ti-ski-jumping">Ski</option>
+        </select>
+      </div>
+      <label class="chk"><input type="checkbox" id="cm-general"> Mark as the General Skip Assignment folder</label>
+      <div class="err" id="cm-err"></div>
+    </div>
+    <div class="mdl-foot">
+      <button class="btn-s" onclick="closeClientModal()">Cancel</button>
+      <button class="btn-p" onclick="saveClient()" id="cm-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- REASON MODAL (for reopen / reset) -->
+<div class="mdl-bk" id="rm-bk">
+  <div class="mdl">
+    <div class="mdl-head"><h3 id="rm-title">Reason required</h3><button class="btn-x" onclick="closeReasonModal()"><i class="ti ti-x"></i></button></div>
+    <div class="mdl-body">
+      <p id="rm-msg" style="font-size:12px;color:#555;margin-bottom:12px">This action will be recorded in the audit log.</p>
+      <div class="fld"><label>Reason *</label><textarea id="rm-reason" placeholder="Why is this being changed?"></textarea></div>
+      <div class="err" id="rm-err"></div>
+    </div>
+    <div class="mdl-foot">
+      <button class="btn-s" onclick="closeReasonModal()">Cancel</button>
+      <button class="btn-p" onclick="confirmReason()" id="rm-save">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- PHOTO LIGHTBOX -->
+<div class="mdl-bk" id="lb-bk" onclick="closeLightbox()" style="background:rgba(0,0,0,0.85)">
+  <img id="lb-img" style="max-width:96vw;max-height:96vh;border-radius:6px">
+</div>
+
+<!-- ACCOUNT MENU -->
+<div class="acct-bk" id="acct-bk" onclick="toggleAccount()"></div>
+<div class="acct" id="acct">
+  <div class="acct-name" id="acct-name">—</div>
+  <div class="acct-em" id="acct-em"></div>
+  <hr>
+  <button class="btn-s" onclick="doSignOut()"><i class="ti ti-logout"></i> Sign out</button>
+</div>
+
+<!-- LOGIN OVERLAY (active by default — defensive) -->
+<div class="lo" id="lo">
+  <div class="lo-card">
+    <div class="lo-head">
+      <div class="lo-logo"><i class="ti ti-snowflake"></i></div>
+      <div class="lo-title">Snowy Skips Office</div>
+      <div class="lo-sub">Office access only</div>
+    </div>
+    <div class="lo-tabs">
+      <button class="lo-tab active" id="lt-signin" onclick="loginTab('signin')">Sign in</button>
+      <button class="lo-tab" id="lt-register" onclick="loginTab('register')">Register</button>
+    </div>
+    <div class="lo-pane active" id="lp-signin">
+      <div class="fld"><label>Email</label><input type="email" id="li-email" placeholder="you@example.com" autocomplete="username"></div>
+      <div class="fld"><label>Password</label><input type="password" id="li-password" placeholder="Your password" autocomplete="current-password"></div>
+      <div class="err" id="li-err"></div>
+      <button class="btn-p teal" onclick="doSignIn()"><i class="ti ti-login"></i> <span id="li-btn">Sign in</span></button>
+    </div>
+    <div class="lo-pane" id="lp-register">
+      <div class="fld"><label>Email *</label><input type="email" id="rg-email" placeholder="you@example.com" autocomplete="username"></div>
+      <div class="fld"><label>Password * <small style="color:#aaa">(min. 6 chars)</small></label><input type="password" id="rg-password" placeholder="Choose a password" autocomplete="new-password"></div>
+      <div class="fld"><label>Full name *</label><input type="text" id="rg-name" placeholder="e.g. Sarah Jones" autocomplete="name"></div>
+      <div class="fld"><label>Phone (optional)</label><input type="tel" id="rg-phone" placeholder="e.g. 0412 345 678"></div>
+      <div class="err" id="rg-err"></div>
+      <button class="btn-p teal" onclick="doRegister()"><i class="ti ti-user-check"></i> <span id="rg-btn">Create office account</span></button>
+      <p style="font-size:10px;color:var(--mt);margin-top:10px;line-height:1.4">Use this only for office staff. Drivers should register via the driver app.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── SUPABASE ───────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://aehdhirvwfawcchkynsr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_AERCG0lWvzWBYP_pKrAdDA_P08ZgPJ-';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let CLIENTS = [];       // [{id, name, short_code, icon, is_general, active, created_at}]
+let DOCKETS = [];       // raw dockets rows
+let DRIVERS = [];       // raw drivers rows
+let PHOTOS_CACHE = {};  // docket_id → [{zone, storage_path, publicUrl}]
+let AUDIT_CACHE = {};   // docket_id → [{...}]
+let NCRS = [];          // all nonconformances
+let VENMS = [];         // all venm_certificates
+let ISOS = [];          // all iso_audits
+let currentUser = null; // {id, auth_user_id, name, role, email}
+let activeScreen = 'dockets';
+let activeDocket = null;
+let drDetailsEditing = false;
+let _reasonResolve = null;
+let _rtChannel = null;
+let _filters = { client:'', from:'', to:'', search:'' };
+let _editingNcId = null;
+let _editingVnId = null;
+let _editingIsoId = null;
+let _isoFindings = []; // working copy while editing audit
+
+const STAGE_COLS = [
+  { n:1, label:'Order received',    icon:'ti-clipboard',         pill:'pill grey' },
+  { n:2, label:'Skip Bin delivery', icon:'ti-truck-delivery',    pill:'pill blue' },
+  { n:3, label:'Waste Pickup',      icon:'ti-truck-loading',     pill:'pill orange' },
+  { n:4, label:'Waste Disposal',    icon:'ti-recycle',           pill:'pill orange' },
+  { n:5, label:'Completion',        icon:'ti-circle-check',      pill:'pill green' },
+  { n:6, label:'Invoice',           icon:'ti-receipt-2',         pill:'pill green' }
+];
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+function $(id){ return document.getElementById(id); }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function showToast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(window._tTo); window._tTo=setTimeout(()=>t.classList.remove('show'),3200); }
+function fmtDate(d){ if(!d) return '—'; const dt = new Date(d); if(isNaN(dt)) { const [y,m,dy]=String(d).split('-'); if(!y) return '—'; const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return parseInt(dy,10)+' '+M[parseInt(m,10)-1]+' '+y; } return dt.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()]+' '+dt.getFullYear(); }
+function fmtDT(s){ if(!s) return '—'; const dt = new Date(s); if(isNaN(dt)) return s; return fmtDate(dt) + ' ' + dt.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}); }
+function clientNameOf(row){ if(row.oneoff_name) return row.oneoff_name; if(row.client_name) return row.client_name; const c = CLIENTS.find(c=>c.id===row.client_id); return c?c.name:'—'; }
+function initials(name){ if(!name) return '?'; return name.trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase(); }
+
+// ── SCREEN SWITCH ──────────────────────────────────────────────────────────
+function showScreen(s){
+  activeScreen = s;
+  document.querySelectorAll('.scr').forEach(e=>e.classList.remove('active'));
+  $('scr-'+s).classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
+  const navEl = $('nav-'+s); if(navEl) navEl.classList.add('active');
+  const titles = { dockets:'Dockets', clients:'Clients', drivers:'Drivers', audit:'Audit log', settings:'Settings', ncrs:'Nonconformances', venm:'VENM certificates', iso:'ISO 14001 audits' };
+  $('tb-title').textContent = titles[s] || s;
+  if(s==='dockets') renderBoard();
+  if(s==='clients') renderClients();
+  if(s==='drivers') renderDrivers();
+  if(s==='audit') loadAuditLog();
+  if(s==='ncrs') loadNCRs();
+  if(s==='venm') loadVENM();
+  if(s==='iso') loadISO();
+}
+
+// ── AUTH ───────────────────────────────────────────────────────────────────
+function showLogin(){
+  const app = $('app'); if(app) app.classList.remove('shown');
+  const lo = $('lo'); if(lo) lo.classList.remove('hidden');
+  loginTab('signin');
+}
+function hideLogin(){
+  const lo = $('lo'); if(lo) lo.classList.add('hidden');
+  const app = $('app'); if(app) app.classList.add('shown');
+}
+function loginTab(t){
+  $('lt-signin').classList.toggle('active', t==='signin');
+  $('lt-register').classList.toggle('active', t==='register');
+  $('lp-signin').classList.toggle('active', t==='signin');
+  $('lp-register').classList.toggle('active', t==='register');
+}
+
+async function doSignIn(){
+  const email = $('li-email').value.trim();
+  const password = $('li-password').value;
+  const err = $('li-err'); err.classList.remove('show');
+  if(!email || !password){ err.textContent='Email and password required.'; err.classList.add('show'); return; }
+  $('li-btn').textContent = 'Signing in…';
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){ err.textContent = error.message || 'Sign in failed.'; err.classList.add('show'); $('li-btn').textContent='Sign in'; return; }
+    // onAuthStateChange triggers reload
+  } catch(e){ err.textContent = e.message || 'Network error.'; err.classList.add('show'); $('li-btn').textContent='Sign in'; }
+}
+
+async function doRegister(){
+  const email = $('rg-email').value.trim();
+  const password = $('rg-password').value;
+  const name = $('rg-name').value.trim();
+  const phone = $('rg-phone').value.trim();
+  const err = $('rg-err'); err.classList.remove('show');
+  if(!email || !password || !name){ err.textContent='Email, password and name required.'; err.classList.add('show'); return; }
+  if(password.length < 6){ err.textContent='Password must be at least 6 characters.'; err.classList.add('show'); return; }
+  $('rg-btn').textContent='Creating account…';
+  try {
+    const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email, password });
+    if(signUpError){ err.textContent=signUpError.message; err.classList.add('show'); $('rg-btn').textContent='Create office account'; return; }
+    const authUserId = signUpData.user && signUpData.user.id;
+    if(!authUserId){ err.textContent='Check your email to confirm before signing in.'; err.classList.add('show'); $('rg-btn').textContent='Create office account'; return; }
+    const { error: insErr } = await sb.from('drivers').insert([{ auth_user_id: authUserId, name, phone: phone||null, role:'office' }]);
+    if(insErr){ err.textContent='Profile save failed: '+insErr.message; err.classList.add('show'); $('rg-btn').textContent='Create office account'; return; }
+    // onAuthStateChange triggers reload
+  } catch(e){ err.textContent = e.message||'Registration error.'; err.classList.add('show'); $('rg-btn').textContent='Create office account'; }
+}
+
+async function doSignOut(){
+  closeAccount();
+  try { await sb.auth.signOut(); } catch(e){}
+}
+
+async function loadCurrentUser(authUserId){
+  try {
+    const { data, error } = await sb.from('drivers').select('*').eq('auth_user_id', authUserId).maybeSingle();
+    if(error) throw error;
+    return data || null;
+  } catch(e){ console.error('loadCurrentUser', e); return null; }
+}
+
+function setCurrentUser(u, email){
+  currentUser = { id: u.id, auth_user_id: u.auth_user_id, name: u.name, phone: u.phone||'', role: u.role||'office', email: email||'' };
+  $('sb-un').textContent = currentUser.name;
+  $('sb-role').textContent = currentUser.role;
+  $('sb-av').textContent = initials(currentUser.name);
+}
+
+function toggleAccount(){
+  const on = $('acct').classList.contains('on');
+  $('acct').classList.toggle('on', !on);
+  $('acct-bk').classList.toggle('on', !on);
+  if(!on && currentUser){
+    $('acct-name').textContent = currentUser.name;
+    $('acct-em').textContent = currentUser.email;
+  }
+}
+function closeAccount(){ $('acct').classList.remove('on'); $('acct-bk').classList.remove('on'); }
+
+// ── DATA LOAD ──────────────────────────────────────────────────────────────
+async function loadClientsFromDB(){
+  try {
+    const { data, error } = await sb.from('clients').select('*').order('name');
+    if(error) throw error;
+    CLIENTS = data || [];
+    // Populate filter dropdown
+    const sel = $('fl-client');
+    if(sel){
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">All clients</option>' + CLIENTS.filter(c=>c.active).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+      sel.value = cur;
+    }
+  } catch(e){ console.error('loadClients', e); showToast('Could not load clients: '+e.message); }
+}
+
+async function loadDocketsFromDB(){
+  try {
+    const { data, error } = await sb.from('dockets').select('*').order('created_at', { ascending:false });
+    if(error) throw error;
+    DOCKETS = data || [];
+    $('bdg-dockets').textContent = DOCKETS.filter(d => (d.stage||1) < 6 && !d.voided).length;
+    renderBoard();
+  } catch(e){ console.error('loadDockets', e); showToast('Could not load dockets: '+e.message); }
+}
+
+async function loadDriversFromDB(){
+  try {
+    const { data, error } = await sb.from('drivers').select('*').order('created_at', { ascending:false });
+    if(error) throw error;
+    DRIVERS = data || [];
+    const sel = $('al-driver');
+    if(sel){
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">All drivers</option>' + DRIVERS.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
+      sel.value = cur;
+    }
+  } catch(e){ console.error('loadDrivers', e); showToast('Could not load drivers: '+e.message); }
+}
+
+function subscribeToRealtime(){
+  if(_rtChannel) { try { sb.removeChannel(_rtChannel); } catch(e){} }
+  try {
+    _rtChannel = sb.channel('office-feed')
+      .on('postgres_changes', { event:'*', schema:'public', table:'dockets' }, () => { loadDocketsFromDB(); if(activeDocket) refreshDrawer(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'clients' }, () => { loadClientsFromDB(); if(activeScreen==='clients') renderClients(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'drivers' }, () => { loadDriversFromDB(); if(activeScreen==='drivers') renderDrivers(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'audit_log' }, () => { if(activeScreen==='audit') loadAuditLog(); if(activeDocket) loadAuditForDocket(activeDocket.id); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'photos' }, (payload) => { const dId = payload.new && payload.new.docket_id || payload.old && payload.old.docket_id; if(dId) delete PHOTOS_CACHE[dId]; if(activeDocket && activeDocket.id===dId) loadPhotosForDocket(dId); })
+      .subscribe();
+  } catch(e){ console.warn('realtime', e); }
+}
+
+// ── KANBAN ─────────────────────────────────────────────────────────────────
+function renderBoard(){
+  const kb = $('kb');
+  if(!kb) return;
+  const filtered = DOCKETS.filter(filterDocket);
+  kb.innerHTML = STAGE_COLS.map(col => {
+    const rows = filtered.filter(d => (d.stage||1) === col.n);
+    return `<div class="kb-col">
+      <div class="kb-head">
+        <div class="kb-head-t"><i class="ti ${col.icon}"></i> ${col.label}</div>
+        <div class="kb-count">${rows.length}</div>
+      </div>
+      <div class="kb-body">
+        ${rows.length ? rows.map(docketCard).join('') : `<div class="kb-empty"><i class="ti ti-inbox"></i>No dockets</div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function docketCard(d){
+  const sigs = d.sigs || {};
+  const driver = DRIVERS.find(dr => dr.id === d.submitted_by) || DRIVERS.find(dr => dr.id === d.created_by);
+  const driverName = driver ? driver.name : '';
+  const bins = (d.bins_picked_up && d.bins_picked_up.length ? d.bins_picked_up : d.bins_delivered) || [];
+  const binsLabel = bins.length ? bins.map(b=>'#'+b).join(', ') : '';
+  // A finished skip (driver-completed, stage 5 "Completion" or 6 "Invoice")
+  // gets a one-tap PDF icon right on the card — no need to open the drawer
+  // just to send the customer their docket.
+  const isCompleted = (d.stage||1) >= 5;
+  const pdfBtn = isCompleted ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();generateDocketPDF('${esc(d.id)}','client')" title="Download client PDF"><i class="ti ti-file-download"></i></button>` : '';
+  const quoteBtn = d.is_quote ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();generateQuotePDF('${esc(d.id)}')" title="Download quotation PDF"><i class="ti ti-report-money"></i></button>` : '';
+  return `<div class="dcard ${d.has_nc?'has-nc':''}" onclick="openDrawer('${esc(d.id)}')">
+    <div class="dc-top">
+      <span class="dc-id">${esc(d.id)}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${d.is_quote?'<span class="pill blue">Quote</span>':''}
+        ${quoteBtn}
+        ${pdfBtn}
+        <span class="dc-pill">${esc(d.bin_type||'—')}</span>
+      </div>
+    </div>
+    <div class="dc-client">${esc(clientNameOf(d))}</div>
+    <div class="dc-site">${esc(d.site||'No site')}</div>
+    <div class="dc-meta">
+      ${d.waste_type?`<span class="dc-tag"><i class="ti ti-trash"></i>${esc(d.waste_type)}</span>`:''}
+      ${binsLabel?`<span class="dc-tag"><i class="ti ti-stack-2"></i>${esc(binsLabel)}</span>`:''}
+      ${d.date?`<span class="dc-tag"><i class="ti ti-calendar"></i>${esc(fmtDate(d.date))}</span>`:''}
+    </div>
+    <div class="dc-foot">
+      <span class="dc-sub">${driverName?'by '+esc(driverName):''}</span>
+      <span class="dc-sigs">
+        <span class="dc-sig ${sigs.delivery?'on':''}" title="Delivery"></span>
+        <span class="dc-sig ${sigs.pickup?'on':''}" title="Pickup"></span>
+        <span class="dc-sig ${sigs.disposal?'on':''}" title="Disposal"></span>
+      </span>
+    </div>
+  </div>`;
+}
+
+function filterDocket(d){
+  if(d.voided) return false;
+  if(_filters.client && d.client_id !== _filters.client) return false;
+  if(_filters.from){
+    const dd = d.date || (d.created_at && d.created_at.slice(0,10));
+    if(!dd || dd < _filters.from) return false;
+  }
+  if(_filters.to){
+    const dd = d.date || (d.created_at && d.created_at.slice(0,10));
+    if(!dd || dd > _filters.to) return false;
+  }
+  if(_filters.search){
+    const q = _filters.search.toLowerCase();
+    const blob = [d.id, d.client_name, d.oneoff_name, d.site, d.waste_type, d.bin_type, d.facility, ...(d.bins_delivered||[]).map(b=>'bin '+b), ...(d.bins_picked_up||[]).map(b=>'bin '+b)].filter(Boolean).join(' ').toLowerCase();
+    if(!blob.includes(q)) return false;
+  }
+  return true;
+}
+
+function clearFilters(){
+  _filters = { client:'', from:'', to:'', search:'' };
+  $('fl-client').value=''; $('fl-from').value=''; $('fl-to').value=''; $('fl-search').value='';
+  renderBoard();
+}
+
+function refreshDockets(){ loadDocketsFromDB(); showToast('Refreshed.'); }
+
+// ── DRAWER ─────────────────────────────────────────────────────────────────
+function openDrawer(docketId){
+  const d = DOCKETS.find(x => x.id === docketId);
+  if(!d) return;
+  activeDocket = d;
+  drDetailsEditing = false;
+  $('dr-title').textContent = d.id + ' — ' + clientNameOf(d);
+  $('dr-sub').textContent = (STAGE_COLS.find(c=>c.n===(d.stage||1))||{}).label + ' · ' + (d.site||'No site');
+  drTab('details');
+  renderDrawerDetails(d);
+  renderDrawerSigs(d);
+  renderDrawerActions(d);
+  renderDrawerCompliance(d);
+  loadPhotosForDocket(d.id);
+  loadAuditForDocket(d.id);
+  $('dr-bk').classList.add('on');
+  $('drawer').classList.add('on');
+}
+
+function closeDrawer(){
+  $('dr-bk').classList.remove('on');
+  $('drawer').classList.remove('on');
+  activeDocket = null;
+  drDetailsEditing = false;
+}
+
+function drTab(t){
+  document.querySelectorAll('.dr-tab').forEach(b => b.classList.toggle('active', b.dataset.tab===t));
+  document.querySelectorAll('.dr-pane').forEach(p => p.classList.remove('active'));
+  $('dp-'+t).classList.add('active');
+}
+
+function refreshDrawer(){
+  if(!activeDocket) return;
+  const fresh = DOCKETS.find(x => x.id === activeDocket.id);
+  if(!fresh){ closeDrawer(); return; }
+  activeDocket = fresh;
+  renderDrawerDetails(fresh);
+  renderDrawerSigs(fresh);
+  renderDrawerActions(fresh);
+  renderDrawerCompliance(fresh);
+  $('dr-title').textContent = fresh.id + ' — ' + clientNameOf(fresh);
+  $('dr-sub').textContent = (STAGE_COLS.find(c=>c.n===(fresh.stage||1))||{}).label + ' · ' + (fresh.site||'No site');
+}
+
+function fieldRow(label, val){ return `<div class="dr-field"><label>${esc(label)}</label><div class="v">${val==null||val===''?'—':esc(val)}</div></div>`; }
+function dtRow(label, id, value, type){ return `<div class="dr-field"><label>${esc(label)}</label><input type="${type}" id="${id}" value="${esc(value||'')}"></div>`; }
+
+function renderDrawerDetails(d){
+  const pcts = d.waste_pcts || {};
+  const pctList = Object.entries(pcts).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}%`).join(', ');
+  const sub = DRIVERS.find(dr=>dr.id===d.submitted_by);
+  const cr = DRIVERS.find(dr=>dr.id===d.created_by);
+  const ed = drDetailsEditing;
+  const editBar = ed
+    ? `<div class="dr-edit-bar"><button class="btn-s" onclick="cancelDetailsEdit()">Cancel</button><button class="btn-p teal" onclick="saveDetailsEdit('${esc(d.id)}')"><i class="ti ti-device-floppy"></i> Save changes</button></div>`
+    : `<div class="dr-edit-bar"><button class="btn-s" onclick="toggleDetailsEdit()"><i class="ti ti-clock-edit"></i> Edit dates &amp; times</button></div>`;
+  $('dp-details').innerHTML = `
+    ${editBar}
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-info-circle"></i>Order</div>
+      <div class="dr-grid">
+        ${fieldRow('Docket ID', d.id)}
+        ${fieldRow('Stage', (STAGE_COLS.find(c=>c.n===(d.stage||1))||{}).label)}
+        ${fieldRow('Client', clientNameOf(d))}
+        ${fieldRow('Site', d.site)}
+        ${ed ? dtRow('Order date', 'dr-e-date', d.date, 'date') : fieldRow('Order date', fmtDate(d.date))}
+        ${fieldRow('Bin type', d.bin_type)}
+        ${fieldRow('Waste type', d.waste_type)}
+        ${fieldRow('Created at', fmtDT(d.created_at))}
+      </div>
+      ${d.oneoff_name?`<div class="dr-grid">${fieldRow('One-off client', d.oneoff_name)}${fieldRow('Contact', d.oneoff_contact)}</div>`:''}
+      ${d.comments?fieldRow('Comments', d.comments):''}
+    </div>
+    ${d.is_quote ? `<div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-report-money"></i>Quotation</div>
+      <div class="dr-grid" style="grid-template-columns:1fr">
+        ${(d.quote_items||[]).map(it => { const qty=parseFloat(it.qty)||0, price=parseFloat(it.price)||0; return `<div class="dr-field" style="display:flex;justify-content:space-between;margin-bottom:0"><span style="font-size:13px;color:#1a1a1a">${esc(it.desc||'—')} <span style="color:#999">× ${qty||1}</span></span><span style="font-size:13px;font-weight:600;color:#1a1a1a">$${(qty*price).toFixed(2)}</span></div>`; }).join('') || '<div class="dr-field"><div class="v">No line items</div></div>'}
+        <div class="dr-field" style="display:flex;justify-content:space-between;margin-top:4px;padding-top:8px;border-top:1px solid #e7eaf0"><span style="font-size:12px;font-weight:700;text-transform:uppercase;color:#666">Total (excl. GST)</span><span style="font-size:14px;font-weight:700;color:#155724">$${(d.quote_items||[]).reduce((s,it)=>s+((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)),0).toFixed(2)}</span></div>
+      </div>
+      ${d.quote_notes?fieldRow('Notes', d.quote_notes):''}
+    </div>` : ''}
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-truck-delivery"></i>Delivery (stage 2)</div>
+      <div class="dr-grid">
+        ${ed ? dtRow('Date', 'dr-e-arr-date', d.arr_date, 'date') : fieldRow('Date', fmtDate(d.arr_date))}
+        ${ed ? dtRow('Time', 'dr-e-arr-time', d.arr_time, 'time') : fieldRow('Time', d.arr_time)}
+        ${fieldRow('Truck rego', d.rego)}
+        ${fieldRow('Bins delivered', (d.bins_delivered||[]).map(b=>'#'+b).join(', '))}
+      </div>
+    </div>
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-truck-loading"></i>Pickup (stage 3)</div>
+      <div class="dr-grid">
+        ${ed ? dtRow('Date', 'dr-e-pu-date', d.pu_date, 'date') : fieldRow('Date', fmtDate(d.pu_date))}
+        ${ed ? dtRow('Time', 'dr-e-pu-time', d.pu_time, 'time') : fieldRow('Time', d.pu_time)}
+        ${fieldRow('Truck rego', d.pu_rego)}
+        ${fieldRow('Bins picked up', (d.bins_picked_up||[]).map(b=>'#'+b).join(', '))}
+      </div>
+      ${pctList?fieldRow('Waste composition', pctList):''}
+    </div>
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-recycle"></i>Disposal (stage 4–5)</div>
+      <div class="dr-grid">
+        ${ed ? dtRow('Date', 'dr-e-dis-date', d.dis_date, 'date') : fieldRow('Date', fmtDate(d.dis_date))}
+        ${ed ? dtRow('Time', 'dr-e-dis-time', d.dis_time, 'time') : fieldRow('Time', d.dis_time)}
+        ${fieldRow('Facility', d.facility)}
+        ${fieldRow('Weight (t)', d.weight)}
+        ${fieldRow('Volume (m³)', d.cbm)}
+        ${fieldRow('Submitted at', fmtDT(d.submitted_at))}
+      </div>
+    </div>
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-user-check"></i>People</div>
+      <div class="dr-grid">
+        ${fieldRow('Created by', cr ? cr.name : '—')}
+        ${fieldRow('Submitted by', sub ? sub.name : '—')}
+        ${fieldRow('Non-conformance', d.has_nc?'Yes':'No')}
+      </div>
+    </div>
+  `;
+}
+
+function toggleDetailsEdit(){
+  drDetailsEditing = true;
+  if(activeDocket) renderDrawerDetails(activeDocket);
+}
+
+function cancelDetailsEdit(){
+  drDetailsEditing = false;
+  if(activeDocket) renderDrawerDetails(activeDocket);
+}
+
+async function saveDetailsEdit(docketId){
+  const val = id => { const e = document.getElementById(id); return e ? (e.value || null) : null; };
+  const patch = {
+    date:     val('dr-e-date'),
+    arr_date: val('dr-e-arr-date'),
+    arr_time: val('dr-e-arr-time'),
+    pu_date:  val('dr-e-pu-date'),
+    pu_time:  val('dr-e-pu-time'),
+    dis_date: val('dr-e-dis-date'),
+    dis_time: val('dr-e-dis-time')
+  };
+  try {
+    const { error } = await sb.from('dockets').update(patch).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'edited:office-datetimes', patch);
+    drDetailsEditing = false;
+    showToast('Dates & times updated.');
+    await loadDocketsFromDB();
+    const fresh = DOCKETS.find(x => x.id === docketId);
+    if(fresh){ activeDocket = fresh; renderDrawerDetails(fresh); renderDrawerActions(fresh); }
+  } catch(e) {
+    showToast('Save failed: ' + e.message);
+  }
+}
+
+function renderDrawerSigs(d){
+  const sigs = d.sigs || {};
+  const block = (label, key) => {
+    const s = sigs[key];
+    if(!s) return `<div class="sig-block"><div class="sm" style="font-weight:600;color:#1a1a1a;margin-bottom:4px">${esc(label)}</div><div class="sm">Not yet signed</div></div>`;
+    const img = (typeof s === 'object' && (s.sig_img||s.sigImg)) ? `<img src="${esc(s.sig_img||s.sigImg)}" alt="signature">` : '';
+    const by = (typeof s==='object' && s.by) || 'signed';
+    const at = (typeof s==='object' && s.at) || '';
+    return `<div class="sig-block"><div class="sm" style="font-weight:600;color:#1a1a1a;margin-bottom:4px">${esc(label)}</div>${img}<div class="sm">Signed by <strong>${esc(by)}</strong></div><div class="sm">${esc(at)}</div></div>`;
+  };
+  $('dp-sigs').innerHTML = `
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-signature"></i>Stage signatures</div>
+      ${block('Delivery', 'delivery')}
+      ${block('Pickup', 'pickup')}
+      ${block('Disposal', 'disposal')}
+    </div>
+  `;
+}
+
+function renderDrawerActions(d){
+  const stage = d.stage || 1;
+  const canNext = stage < 6;
+  const canInvoice = stage < 6;
+  $('dr-actions').innerHTML = `
+    ${d.is_quote ? `<div class="row"><button class="btn-o" onclick="generateQuotePDF('${esc(d.id)}')"><i class="ti ti-report-money"></i> Download Quotation PDF</button></div>` : ''}
+    <div class="row">
+      <button class="btn-o" onclick="generateDocketPDF('${esc(d.id)}','client')"><i class="ti ti-file-text"></i> Download Client PDF</button>
+      <button class="btn-o" onclick="generateDocketPDF('${esc(d.id)}','internal')"><i class="ti ti-file-invoice"></i> Download Internal PDF</button>
+    </div>
+    <div class="row">
+      <button class="btn-p" ${canNext?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveNext('${esc(d.id)}')"><i class="ti ti-arrow-right"></i> Move to next stage</button>
+      <button class="btn-p teal" ${canInvoice?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveToInvoice('${esc(d.id)}')"><i class="ti ti-receipt-2"></i> Move to Invoice</button>
+    </div>
+    <div class="row">
+      <button class="btn-s" onclick="reopenStage('${esc(d.id)}','delivery')">Reopen delivery</button>
+      <button class="btn-s" onclick="reopenStage('${esc(d.id)}','pickup')">Reopen pickup</button>
+      <button class="btn-s" onclick="reopenStage('${esc(d.id)}','disposal')">Reopen disposal</button>
+    </div>
+    <div class="row">
+      <button class="btn-p red" onclick="resetAllSigs('${esc(d.id)}')"><i class="ti ti-refresh"></i> Reset all signatures</button>
+    </div>
+    ${d.oneoff_name ? `<div class="row"><button class="btn-p" onclick="openConvertToClientModal('${esc(d.id)}')"><i class="ti ti-user-plus"></i> Convert ${esc(d.oneoff_name)} to a client folder</button></div>` : ''}
+    ${!d.voided ? `<div class="row"><button class="btn-s" style="border-color:var(--rd);color:var(--rd);width:100%;justify-content:center" onclick="voidDocket('${esc(d.id)}')"><i class="ti ti-trash"></i> Void this docket</button></div>` : `<div class="row" style="font-size:11px;color:var(--rd)"><i class="ti ti-trash"></i> Voided${d.void_reason?': '+esc(d.void_reason):''}</div>`}
+  `;
+}
+
+// ── COMPLIANCE — drawer tab ────────────────────────────────────────────────
+const EPA_CLASSES = [
+  'General Solid Waste (putrescible)',
+  'General Solid Waste (non-putrescible)',
+  'Restricted Solid Waste',
+  'Hazardous Waste',
+  'VENM (Virgin Excavated Natural Material)',
+  'Asbestos',
+  'Special Waste',
+  'Liquid Waste'
+];
+const DISPOSAL_OUTCOMES = ['Landfill','Recycled','Recovered','Reused'];
+
+function retentionDate(d){
+  const base = d.submitted_at || d.created_at;
+  if(!base) return '—';
+  const dt = new Date(base);
+  if(isNaN(dt)) return '—';
+  dt.setFullYear(dt.getFullYear() + 7);
+  return fmtDate(dt);
+}
+
+function ncPill(status){
+  return status === 'closed' ? '<span class="pill green">Closed</span>' : '<span class="pill orange">Open</span>';
+}
+
+function isoStatusPill(s){
+  const m = { compliant:'compliant', minor_nc:'minor', major_nc:'major', observation:'observation', in_progress:'inprogress' };
+  const labels = { compliant:'Compliant', minor_nc:'Minor NC', major_nc:'Major NC', observation:'Observation', in_progress:'In progress', closed:'Closed' };
+  const cls = m[s] || 'grey';
+  return '<span class="pill '+cls+'">'+esc(labels[s]||s||'—')+'</span>';
+}
+
+async function renderDrawerCompliance(d){
+  const pane = $('dp-compliance');
+  if(!pane) return;
+  const isVENM = (d.waste_type === 'VENM') || (d.epa_classification && /VENM/i.test(d.epa_classification));
+  const cls = d.epa_classification || (isVENM ? 'VENM (Virgin Excavated Natural Material)' : '');
+  const out = d.disposal_outcome || '';
+  const dv  = (d.diversion_pct != null) ? d.diversion_pct : (out === 'Landfill' ? 0 : (out ? 100 : ''));
+
+  pane.innerHTML = `
+    <div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-shield-check"></i>ISO 14001:2026 / NSW EPA</div>
+      <div class="cmp-form">
+        <div class="fld">
+          <label>NSW EPA waste classification</label>
+          <select id="cmp-cls">
+            <option value="">— Select —</option>
+            ${EPA_CLASSES.map(c => `<option value="${esc(c)}" ${c===cls?'selected':''}>${esc(c)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld">
+          <label>Disposal outcome</label>
+          <select id="cmp-out">
+            <option value="">— Select —</option>
+            ${DISPOSAL_OUTCOMES.map(o => `<option value="${esc(o)}" ${o===out?'selected':''}>${esc(o)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld">
+          <label>Diversion %</label>
+          <input type="number" id="cmp-dv" min="0" max="100" step="1" value="${dv===''?'':esc(dv)}">
+        </div>
+        <div class="fld">
+          <label>Facility EPA licence number</label>
+          <input type="text" id="cmp-epl" value="${esc(d.facility_epa_licence||'')}" placeholder="e.g. EPL 12345">
+        </div>
+        <div class="fld">
+          <label>Compliance notes</label>
+          <textarea id="cmp-notes" placeholder="Anything noteworthy for auditors…">${esc(d.compliance_notes||'')}</textarea>
+        </div>
+        <div class="fld">
+          <label>7-year retention date</label>
+          <div class="cmp-readonly">${esc(retentionDate(d))}</div>
+        </div>
+        <button class="btn-p teal" onclick="saveCompliance('${esc(d.id)}')"><i class="ti ti-device-floppy"></i> Save compliance</button>
+      </div>
+
+      <div class="cmp-mini">
+        <div class="cmp-mini-h">
+          <span class="lbl"><i class="ti ti-alert-triangle"></i> Nonconformances for this docket</span>
+          <button class="btn-s" onclick="openNCRPanel(null,'${esc(d.id)}')"><i class="ti ti-plus"></i> Raise NC</button>
+        </div>
+        <div id="cmp-nc-list"><div class="cmp-empty">Loading…</div></div>
+      </div>
+
+      <div class="cmp-mini" id="cmp-venm-wrap" style="display:${isVENM?'block':'none'}">
+        <div class="cmp-mini-h">
+          <span class="lbl"><i class="ti ti-certificate"></i> VENM certificates</span>
+          <button class="btn-s" onclick="openVENMPanel(null,'${esc(d.id)}')"><i class="ti ti-plus"></i> Add VENM cert</button>
+        </div>
+        <div id="cmp-venm-list"><div class="cmp-empty">Loading…</div></div>
+      </div>
+    </div>
+  `;
+
+  // Wire outcome → diversion default
+  const outSel = $('cmp-out');
+  if(outSel){
+    outSel.onchange = () => {
+      const v = outSel.value;
+      const dvEl = $('cmp-dv');
+      if(!dvEl) return;
+      if(v === 'Landfill') dvEl.value = 0;
+      else if(v === 'Recycled' || v === 'Recovered' || v === 'Reused') dvEl.value = 100;
+    };
+  }
+  // Wire classification change → show VENM section
+  const clsSel = $('cmp-cls');
+  if(clsSel){
+    clsSel.onchange = () => {
+      const isV = /VENM/i.test(clsSel.value);
+      const wrap = $('cmp-venm-wrap');
+      if(wrap) wrap.style.display = isV ? 'block' : 'none';
+    };
+  }
+
+  await loadNCRsForDocket(d.id);
+  if(isVENM) await loadVENMsForDocket(d.id);
+}
+
+async function loadNCRsForDocket(docketId){
+  const list = $('cmp-nc-list');
+  if(!list) return;
+  try {
+    const { data, error } = await sb.from('nonconformances').select('*').eq('docket_id', docketId).order('created_at', { ascending:false });
+    if(error) throw error;
+    if(!data || !data.length){ list.innerHTML = `<div class="cmp-empty">No nonconformances for this docket.</div>`; return; }
+    list.innerHTML = data.map(nc => `
+      <div class="cmp-row" onclick="openNCRPanel('${esc(nc.id)}')">
+        <div class="cmp-row-top">${ncPill(nc.status)}<span style="font-size:10px;color:var(--mt);font-family:ui-monospace,Menlo,monospace">${esc(nc.stage||'—')}</span></div>
+        <div class="cmp-row-desc">${esc(nc.description||'')}</div>
+        ${nc.corrective_action?`<div style="font-size:11px;color:#555;margin-top:4px"><strong>Corrective:</strong> ${esc(nc.corrective_action)}</div>`:''}
+        <div class="cmp-row-meta">${esc(nc.responsible_person||'—')} · ${esc(fmtDT(nc.created_at))}</div>
+      </div>
+    `).join('');
+  } catch(e){ list.innerHTML = `<div class="cmp-empty" style="color:var(--rd)">Error: ${esc(e.message)}</div>`; }
+}
+
+async function loadVENMsForDocket(docketId){
+  const list = $('cmp-venm-list');
+  if(!list) return;
+  try {
+    const { data, error } = await sb.from('venm_certificates').select('*').eq('docket_id', docketId).order('created_at', { ascending:false });
+    if(error) throw error;
+    if(!data || !data.length){ list.innerHTML = `<div class="cmp-empty">No VENM certificates yet.</div>`; return; }
+    list.innerHTML = data.map(v => `
+      <div class="cmp-row" onclick="openVENMPanel('${esc(v.id)}')">
+        <div class="cmp-row-desc">${esc(v.cert_number||'—')} — ${esc(v.nata_lab||'')}</div>
+        <div class="cmp-row-meta">Ref: ${esc(v.lab_reference||'—')} · Tested ${esc(fmtDate(v.test_date))}${v.cert_image_path?' · image attached':''}</div>
+      </div>
+    `).join('');
+  } catch(e){ list.innerHTML = `<div class="cmp-empty" style="color:var(--rd)">Error: ${esc(e.message)}</div>`; }
+}
+
+async function saveCompliance(docketId){
+  const cls = $('cmp-cls').value || null;
+  const out = $('cmp-out').value || null;
+  const dvRaw = $('cmp-dv').value;
+  const dv = (dvRaw === '' || dvRaw == null) ? null : Math.max(0, Math.min(100, Number(dvRaw)));
+  const epl = $('cmp-epl').value.trim() || null;
+  const notes = $('cmp-notes').value.trim() || null;
+  try {
+    const { error } = await sb.from('dockets').update({
+      epa_classification: cls,
+      disposal_outcome: out,
+      diversion_pct: dv,
+      facility_epa_licence: epl,
+      compliance_notes: notes
+    }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'compliance_updated', `EPA=${cls||'—'}; outcome=${out||'—'}; diversion=${dv==null?'—':dv}%; EPL=${epl||'—'}`);
+    showToast('Compliance saved.');
+    // Local sync so refreshDrawer reflects
+    const idx = DOCKETS.findIndex(x => x.id === docketId);
+    if(idx >= 0){
+      DOCKETS[idx] = { ...DOCKETS[idx], epa_classification: cls, disposal_outcome: out, diversion_pct: dv, facility_epa_licence: epl, compliance_notes: notes };
+    }
+  } catch(e){ showToast('Save failed: '+e.message); }
+}
+
+// ── COMPLIANCE — NCR register ──────────────────────────────────────────────
+async function loadNCRs(){
+  const body = $('nc-body');
+  if(!body) return;
+  body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--mt)">Loading…</td></tr>`;
+  try {
+    const { data, error } = await sb.from('nonconformances').select('*').order('created_at', { ascending:true });
+    if(error) throw error;
+    NCRS = data || [];
+    // Update badge
+    const openCount = NCRS.filter(n => n.status !== 'closed').length;
+    const bdg = $('bdg-ncrs'); if(bdg) bdg.textContent = openCount;
+    renderNCRs();
+  } catch(e){ body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--rd)">Error: ${esc(e.message)}</td></tr>`; }
+}
+
+function renderNCRs(){
+  const body = $('nc-body');
+  if(!body) return;
+  const statusF = $('nc-status').value;
+  const q = ($('nc-search').value||'').trim().toLowerCase();
+  // Sort newest-first for display, but assign NC# in original create order
+  const numbered = NCRS.map((nc, i) => ({ ...nc, _num: 'NC-' + String(i+1).padStart(3,'0') }));
+  const rows = numbered.slice().reverse().filter(nc => {
+    if(statusF && nc.status !== statusF) return false;
+    if(q){
+      const blob = [nc.docket_id, nc.description, nc.corrective_action, nc.responsible_person, nc._num].filter(Boolean).join(' ').toLowerCase();
+      if(!blob.includes(q)) return false;
+    }
+    return true;
+  });
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--mt)">No nonconformances</td></tr>`; return; }
+  body.innerHTML = rows.map(nc => {
+    const docket = DOCKETS.find(x => x.id === nc.docket_id);
+    const docketLabel = docket ? (nc.docket_id + ' — ' + clientNameOf(docket)) : (nc.docket_id || '—');
+    const desc = (nc.description||'').length > 60 ? (nc.description.slice(0,57) + '…') : (nc.description||'');
+    const corr = (nc.corrective_action||'').length > 60 ? (nc.corrective_action.slice(0,57) + '…') : (nc.corrective_action||'');
+    return `<tr style="cursor:pointer" onclick="openNCRPanel('${esc(nc.id)}')">
+      <td style="font-family:ui-monospace,Menlo,monospace;color:var(--mt)">${esc(nc._num)}</td>
+      <td>${ncPill(nc.status)}</td>
+      <td>${nc.docket_id?`<a href="javascript:void(0)" onclick="event.stopPropagation();openDrawer('${esc(nc.docket_id)}')" style="color:var(--mc);font-weight:600;text-decoration:none">${esc(docketLabel)}</a>`:'—'}</td>
+      <td><span class="pill grey">${esc(nc.stage||'—')}</span></td>
+      <td style="color:#1a1a1a">${esc(desc)}</td>
+      <td style="color:#555">${esc(corr)||'<span style="color:var(--mt)">—</span>'}</td>
+      <td>${esc(nc.responsible_person||'—')}</td>
+      <td style="color:var(--mt)">${esc(fmtDate(nc.created_at))}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openNCRPanel(ncId, docketIdHint){
+  _editingNcId = ncId || null;
+  const err = $('nc-err'); err.classList.remove('show'); err.textContent='';
+  // Populate docket dropdown
+  const sel = $('nc-docket');
+  sel.innerHTML = '<option value="">— Select docket —</option>' + DOCKETS.slice().sort((a,b)=>(a.id||'').localeCompare(b.id||'')).map(d => `<option value="${esc(d.id)}">${esc(d.id)} — ${esc(clientNameOf(d))}</option>`).join('');
+  if(ncId){
+    const nc = NCRS.find(n => n.id === ncId);
+    if(!nc){ showToast('NC not found'); return; }
+    $('nc-title').innerHTML = '<i class="ti ti-alert-triangle"></i> Edit nonconformance';
+    sel.value = nc.docket_id || '';
+    $('nc-stage').value = nc.stage || 'order';
+    $('nc-desc').value = nc.description || '';
+    $('nc-correct').value = nc.corrective_action || '';
+    $('nc-resp').value = nc.responsible_person || '';
+    $('nc-stat').value = nc.status || 'open';
+    $('nc-status-fld').style.display = '';
+    $('nc-close-row').style.display = nc.status === 'closed' ? 'none' : '';
+    $('nc-save-lbl').textContent = 'Save changes';
+  } else {
+    $('nc-title').innerHTML = '<i class="ti ti-alert-triangle"></i> Raise nonconformance';
+    sel.value = docketIdHint || '';
+    $('nc-stage').value = 'order';
+    $('nc-desc').value = '';
+    $('nc-correct').value = '';
+    $('nc-resp').value = currentUser ? currentUser.name : '';
+    $('nc-status-fld').style.display = 'none';
+    $('nc-close-row').style.display = 'none';
+    $('nc-save-lbl').textContent = 'Save NC';
+  }
+  $('nc-bk').classList.add('on');
+  $('nc-drawer').classList.add('on');
+}
+
+function closeNCRPanel(){
+  $('nc-bk').classList.remove('on');
+  $('nc-drawer').classList.remove('on');
+  _editingNcId = null;
+}
+
+async function saveNCR(){
+  const err = $('nc-err'); err.classList.remove('show'); err.textContent='';
+  const docketId = $('nc-docket').value;
+  const stage = $('nc-stage').value;
+  const desc = $('nc-desc').value.trim();
+  const corr = $('nc-correct').value.trim();
+  const resp = $('nc-resp').value.trim();
+  if(!docketId){ err.textContent='Docket is required.'; err.classList.add('show'); return; }
+  if(!desc){ err.textContent='Description is required.'; err.classList.add('show'); return; }
+  $('nc-save').disabled = true;
+  try {
+    if(_editingNcId){
+      const stat = $('nc-stat').value;
+      const patch = { stage, description: desc, corrective_action: corr||null, responsible_person: resp||null, status: stat };
+      // If closing, set closed_at
+      const prev = NCRS.find(n => n.id === _editingNcId);
+      if(stat === 'closed' && prev && prev.status !== 'closed'){ patch.closed_at = new Date().toISOString(); }
+      if(stat === 'open'){ patch.closed_at = null; }
+      const { error } = await sb.from('nonconformances').update(patch).eq('id', _editingNcId);
+      if(error) throw error;
+      await logAudit(docketId, 'nc_updated', desc.slice(0,200));
+      showToast('NC updated.');
+    } else {
+      const row = { docket_id: docketId, stage, description: desc, corrective_action: corr||null, responsible_person: resp||null, status: 'open', created_by: currentUser?currentUser.id:null };
+      const { error } = await sb.from('nonconformances').insert([row]);
+      if(error) throw error;
+      // Also flag the docket as has_nc
+      try { await sb.from('dockets').update({ has_nc: true }).eq('id', docketId); } catch(e){}
+      await logAudit(docketId, 'nc_raised', desc.slice(0,200));
+      showToast('NC raised.');
+    }
+    closeNCRPanel();
+    await loadNCRs();
+    if(activeDocket && activeDocket.id === docketId) await loadNCRsForDocket(docketId);
+  } catch(e){
+    err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
+  } finally { $('nc-save').disabled = false; }
+}
+
+async function closeNCRRecord(){
+  if(!_editingNcId) return;
+  const nc = NCRS.find(n => n.id === _editingNcId);
+  if(!nc) return;
+  try {
+    const { error } = await sb.from('nonconformances').update({ status:'closed', closed_at: new Date().toISOString() }).eq('id', _editingNcId);
+    if(error) throw error;
+    await logAudit(nc.docket_id, 'nc_closed', (nc.description||'').slice(0,200));
+    showToast('NC closed.');
+    closeNCRPanel();
+    await loadNCRs();
+    if(activeDocket && activeDocket.id === nc.docket_id) await loadNCRsForDocket(nc.docket_id);
+  } catch(e){ showToast('Close failed: '+e.message); }
+}
+
+// ── COMPLIANCE — VENM register ─────────────────────────────────────────────
+async function loadVENM(){
+  const body = $('vn-body');
+  if(!body) return;
+  body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">Loading…</td></tr>`;
+  try {
+    const { data, error } = await sb.from('venm_certificates').select('*').order('created_at', { ascending:true });
+    if(error) throw error;
+    VENMS = data || [];
+    renderVENM();
+  } catch(e){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--rd)">Error: ${esc(e.message)}</td></tr>`; }
+}
+
+function renderVENM(){
+  const body = $('vn-body');
+  if(!body) return;
+  const q = ($('vn-search').value||'').trim().toLowerCase();
+  const numbered = VENMS.map((v, i) => ({ ...v, _num: 'VC-' + String(i+1).padStart(3,'0') }));
+  const rows = numbered.slice().reverse().filter(v => {
+    if(!q) return true;
+    const blob = [v.docket_id, v.cert_number, v.nata_lab, v.lab_reference, v._num].filter(Boolean).join(' ').toLowerCase();
+    return blob.includes(q);
+  });
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">No VENM certificates</td></tr>`; return; }
+  body.innerHTML = rows.map(v => {
+    const docket = DOCKETS.find(x => x.id === v.docket_id);
+    const docketLabel = docket ? (v.docket_id + ' — ' + clientNameOf(docket)) : (v.docket_id || '—');
+    const imgUrl = v.cert_image_path ? sb.storage.from('docket-photos').getPublicUrl(v.cert_image_path).data.publicUrl : null;
+    return `<tr style="cursor:pointer" onclick="openVENMPanel('${esc(v.id)}')">
+      <td style="font-family:ui-monospace,Menlo,monospace;color:var(--mt)">${esc(v._num)}</td>
+      <td>${v.docket_id?`<a href="javascript:void(0)" onclick="event.stopPropagation();openDrawer('${esc(v.docket_id)}')" style="color:var(--mc);font-weight:600;text-decoration:none">${esc(docketLabel)}</a>`:'—'}</td>
+      <td>${esc(v.cert_number||'—')}</td>
+      <td>${esc(v.nata_lab||'—')}</td>
+      <td style="color:#555">${esc(v.lab_reference||'—')}</td>
+      <td>${esc(fmtDate(v.test_date))}</td>
+      <td>${imgUrl?`<a href="${esc(imgUrl)}" target="_blank" onclick="event.stopPropagation()" style="color:var(--or)"><i class="ti ti-photo"></i> View</a>`:'<span style="color:var(--mt)">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openVENMPanel(vnId, docketIdHint){
+  _editingVnId = vnId || null;
+  const err = $('vn-err'); err.classList.remove('show'); err.textContent='';
+  const sel = $('vn-docket');
+  sel.innerHTML = '<option value="">— Select docket —</option>' + DOCKETS.slice().sort((a,b)=>(a.id||'').localeCompare(b.id||'')).map(d => `<option value="${esc(d.id)}">${esc(d.id)} — ${esc(clientNameOf(d))}</option>`).join('');
+  $('vn-img').value = '';
+  $('vn-img-existing').textContent = '';
+  if(vnId){
+    const v = VENMS.find(x => x.id === vnId);
+    if(!v){ showToast('Cert not found'); return; }
+    $('vn-title').textContent = 'Edit VENM certificate';
+    sel.value = v.docket_id || '';
+    $('vn-cert').value = v.cert_number || '';
+    $('vn-lab').value = v.nata_lab || '';
+    $('vn-ref').value = v.lab_reference || '';
+    $('vn-date').value = v.test_date || '';
+    $('vn-notes').value = v.notes || '';
+    if(v.cert_image_path){ $('vn-img-existing').textContent = 'Existing image attached: ' + v.cert_image_path.split('/').pop(); }
+    $('vn-save-lbl').textContent = 'Save changes';
+  } else {
+    $('vn-title').textContent = 'Add VENM certificate';
+    sel.value = docketIdHint || '';
+    $('vn-cert').value = '';
+    $('vn-lab').value = '';
+    $('vn-ref').value = '';
+    $('vn-date').value = '';
+    $('vn-notes').value = '';
+    $('vn-save-lbl').textContent = 'Save cert';
+  }
+  $('vn-bk').classList.add('on');
+  $('vn-drawer').classList.add('on');
+}
+
+function closeVENMPanel(){
+  $('vn-bk').classList.remove('on');
+  $('vn-drawer').classList.remove('on');
+  _editingVnId = null;
+}
+
+async function saveVENM(){
+  const err = $('vn-err'); err.classList.remove('show'); err.textContent='';
+  const docketId = $('vn-docket').value;
+  const cert = $('vn-cert').value.trim();
+  const lab = $('vn-lab').value.trim();
+  const ref = $('vn-ref').value.trim();
+  const date = $('vn-date').value || null;
+  const notes = $('vn-notes').value.trim();
+  const file = $('vn-img').files && $('vn-img').files[0];
+  if(!docketId){ err.textContent='Docket is required.'; err.classList.add('show'); return; }
+  if(!cert){ err.textContent='Certificate number is required.'; err.classList.add('show'); return; }
+  if(!lab){ err.textContent='NATA lab is required.'; err.classList.add('show'); return; }
+  if(!date){ err.textContent='Test date is required.'; err.classList.add('show'); return; }
+  $('vn-save').disabled = true;
+  try {
+    let storagePath = null;
+    if(file){
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const path = `venm/${docketId}/${Date.now()}_${safeName}`;
+      const { error: upErr } = await sb.storage.from('docket-photos').upload(path, file, { contentType: file.type || 'image/jpeg', upsert:false });
+      if(upErr) throw upErr;
+      storagePath = path;
+    }
+    const row = {
+      docket_id: docketId,
+      cert_number: cert,
+      nata_lab: lab,
+      lab_reference: ref || null,
+      test_date: date,
+      notes: notes || null
+    };
+    if(storagePath) row.cert_image_path = storagePath;
+    if(_editingVnId){
+      const { error } = await sb.from('venm_certificates').update(row).eq('id', _editingVnId);
+      if(error) throw error;
+      await logAudit(docketId, 'venm_cert_updated', cert);
+      showToast('VENM cert updated.');
+    } else {
+      row.created_by = currentUser ? currentUser.id : null;
+      const { error } = await sb.from('venm_certificates').insert([row]);
+      if(error) throw error;
+      await logAudit(docketId, 'venm_cert_added', cert);
+      showToast('VENM cert saved.');
+    }
+    closeVENMPanel();
+    await loadVENM();
+    if(activeDocket && activeDocket.id === docketId) await loadVENMsForDocket(docketId);
+  } catch(e){
+    err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
+  } finally { $('vn-save').disabled = false; }
+}
+
+// ── COMPLIANCE — ISO audits ────────────────────────────────────────────────
+async function loadISO(){
+  const body = $('is-body');
+  if(!body) return;
+  body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">Loading…</td></tr>`;
+  try {
+    const { data, error } = await sb.from('iso_audits').select('*').order('audit_date', { ascending:false });
+    if(error) throw error;
+    ISOS = data || [];
+    renderISO();
+  } catch(e){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--rd)">Error: ${esc(e.message)}</td></tr>`; }
+}
+
+function renderISO(){
+  const body = $('is-body');
+  if(!body) return;
+  const q = ($('is-search').value||'').trim().toLowerCase();
+  // Ordinal numbers based on audit_date ascending — recompute
+  const ordered = ISOS.slice().sort((a,b)=>(a.audit_date||'').localeCompare(b.audit_date||''));
+  const idMap = {};
+  ordered.forEach((a, i) => { idMap[a.id] = 'IA-' + String(i+1).padStart(3,'0'); });
+  const rows = ISOS.filter(a => {
+    if(!q) return true;
+    const blob = [a.title, a.auditor_name, a.scope, idMap[a.id]].filter(Boolean).join(' ').toLowerCase();
+    return blob.includes(q);
+  });
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">No audits</td></tr>`; return; }
+  body.innerHTML = rows.map(a => {
+    const findings = Array.isArray(a.findings) ? a.findings : [];
+    const scope = (a.scope||'').length > 80 ? (a.scope.slice(0,77)+'…') : (a.scope||'');
+    const status = a.closed_at ? 'closed' : (a.overall_status || 'in_progress');
+    return `<tr style="cursor:pointer" onclick="openISOPanel('${esc(a.id)}')">
+      <td style="font-family:ui-monospace,Menlo,monospace;color:var(--mt)">${esc(idMap[a.id]||'—')}</td>
+      <td>${esc(fmtDate(a.audit_date))}</td>
+      <td style="font-weight:600;color:var(--mc)">${esc(a.title||'—')}</td>
+      <td>${esc(a.auditor_name||'—')}</td>
+      <td style="color:#555">${esc(scope)}</td>
+      <td>${isoStatusPill(status)}</td>
+      <td style="color:var(--mt)">${findings.length}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFindings(){
+  const wrap = $('is-findings');
+  if(!wrap) return;
+  if(!_isoFindings.length){ wrap.innerHTML = `<div class="cmp-empty">No findings yet. Click "Add finding" above.</div>`; return; }
+  wrap.innerHTML = _isoFindings.map((f, i) => `
+    <div class="find-row">
+      <div class="fr-head">
+        <span class="iso-clause">ISO ${esc(f.clause||'—')}</span>
+        <button class="fr-rm" onclick="removeFinding(${i})"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="fld-row">
+        <div class="fld">
+          <label>ISO clause</label>
+          <input type="text" data-fi="${i}" data-fk="clause" value="${esc(f.clause||'')}" placeholder="e.g. 6.3">
+        </div>
+        <div class="fld">
+          <label>Status</label>
+          <select data-fi="${i}" data-fk="status">
+            <option value="compliant" ${f.status==='compliant'?'selected':''}>Compliant</option>
+            <option value="minor_nc" ${f.status==='minor_nc'?'selected':''}>Minor NC</option>
+            <option value="major_nc" ${f.status==='major_nc'?'selected':''}>Major NC</option>
+            <option value="observation" ${f.status==='observation'?'selected':''}>Observation</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld">
+        <label>Description</label>
+        <input type="text" data-fi="${i}" data-fk="description" value="${esc(f.description||'')}" placeholder="What was found?">
+      </div>
+      <div class="fld">
+        <label>Corrective action</label>
+        <input type="text" data-fi="${i}" data-fk="corrective" value="${esc(f.corrective||'')}" placeholder="Action required">
+      </div>
+      <div class="fld">
+        <label>Due date</label>
+        <input type="date" data-fi="${i}" data-fk="due" value="${esc(f.due||'')}">
+      </div>
+    </div>
+  `).join('');
+  // Wire change handlers
+  wrap.querySelectorAll('[data-fi]').forEach(el => {
+    el.oninput = el.onchange = (e) => {
+      const i = Number(e.target.dataset.fi);
+      const k = e.target.dataset.fk;
+      if(_isoFindings[i]) _isoFindings[i][k] = e.target.value;
+    };
+  });
+}
+
+function addFinding(){
+  _isoFindings.push({ clause:'', status:'compliant', description:'', corrective:'', due:'' });
+  renderFindings();
+}
+
+function removeFinding(i){
+  _isoFindings.splice(i,1);
+  renderFindings();
+}
+
+function openISOPanel(isoId){
+  _editingIsoId = isoId || null;
+  const err = $('is-err'); err.classList.remove('show'); err.textContent='';
+  if(isoId){
+    const a = ISOS.find(x => x.id === isoId);
+    if(!a){ showToast('Audit not found'); return; }
+    $('is-title').textContent = 'Edit audit — ' + (a.title||'');
+    $('is-title-in').value = a.title || '';
+    $('is-date').value = a.audit_date || '';
+    $('is-auditor').value = a.auditor_name || '';
+    $('is-scope').value = a.scope || '';
+    $('is-status').value = a.overall_status || 'in_progress';
+    _isoFindings = Array.isArray(a.findings) ? JSON.parse(JSON.stringify(a.findings)) : [];
+    $('is-close-row').style.display = a.closed_at ? 'none' : '';
+    $('is-save-lbl').textContent = 'Save changes';
+  } else {
+    $('is-title').textContent = 'New ISO 14001 audit';
+    $('is-title-in').value = '';
+    const today = new Date();
+    $('is-date').value = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    $('is-auditor').value = currentUser ? currentUser.name : '';
+    $('is-scope').value = '';
+    $('is-status').value = 'in_progress';
+    _isoFindings = [];
+    $('is-close-row').style.display = 'none';
+    $('is-save-lbl').textContent = 'Save audit';
+  }
+  renderFindings();
+  $('is-bk').classList.add('on');
+  $('is-drawer').classList.add('on');
+}
+
+function closeISOPanel(){
+  $('is-bk').classList.remove('on');
+  $('is-drawer').classList.remove('on');
+  _editingIsoId = null;
+  _isoFindings = [];
+}
+
+async function saveISO(){
+  const err = $('is-err'); err.classList.remove('show'); err.textContent='';
+  const title = $('is-title-in').value.trim();
+  const date = $('is-date').value || null;
+  const auditor = $('is-auditor').value.trim();
+  const scope = $('is-scope').value.trim() || null;
+  const status = $('is-status').value;
+  if(!title){ err.textContent='Title is required.'; err.classList.add('show'); return; }
+  if(!date){ err.textContent='Audit date is required.'; err.classList.add('show'); return; }
+  if(!auditor){ err.textContent='Auditor name is required.'; err.classList.add('show'); return; }
+  $('is-save').disabled = true;
+  try {
+    const row = {
+      title,
+      audit_date: date,
+      auditor_name: auditor,
+      scope,
+      overall_status: status,
+      findings: _isoFindings
+    };
+    if(_editingIsoId){
+      const { error } = await sb.from('iso_audits').update(row).eq('id', _editingIsoId);
+      if(error) throw error;
+      showToast('Audit updated.');
+    } else {
+      row.created_by = currentUser ? currentUser.id : null;
+      const { error } = await sb.from('iso_audits').insert([row]);
+      if(error) throw error;
+      showToast('Audit saved.');
+    }
+    closeISOPanel();
+    await loadISO();
+  } catch(e){
+    err.textContent = 'Save failed: ' + e.message; err.classList.add('show');
+  } finally { $('is-save').disabled = false; }
+}
+
+async function markISOClosed(){
+  if(!_editingIsoId) return;
+  try {
+    const { error } = await sb.from('iso_audits').update({ closed_at: new Date().toISOString(), closed_by: currentUser?currentUser.id:null }).eq('id', _editingIsoId);
+    if(error) throw error;
+    showToast('Audit closed.');
+    closeISOPanel();
+    await loadISO();
+  } catch(e){ showToast('Close failed: '+e.message); }
+}
+
+// ── PHOTOS ─────────────────────────────────────────────────────────────────
+async function loadPhotosForDocket(docketId){
+  const pane = $('dp-photos');
+  pane.innerHTML = `<div style="color:var(--mt);font-size:11px;padding:10px">Loading photos…</div>`;
+  try {
+    let list = PHOTOS_CACHE[docketId];
+    if(!list){
+      const { data, error } = await sb.from('photos').select('*').eq('docket_id', docketId).order('uploaded_at', { ascending:true });
+      if(error) throw error;
+      list = (data||[]).map(p => {
+        const { data: pub } = sb.storage.from('docket-photos').getPublicUrl(p.storage_path);
+        return { zone: p.zone, storage_path: p.storage_path, publicUrl: pub.publicUrl, uploaded_at: p.uploaded_at };
+      });
+      PHOTOS_CACHE[docketId] = list;
+    }
+    if(!list.length){ pane.innerHTML = `<div style="color:var(--mt);font-size:12px;padding:20px;text-align:center"><i class="ti ti-photo-off" style="font-size:30px;display:block;margin-bottom:6px;color:#ccc"></i>No photos uploaded for this docket</div>`; return; }
+    const zoneLabels = { arr:'Arrival / Delivery', pu:'Pickup', tip:'Disposal — Landfill / Tip', rec:'Disposal — Recycle' };
+    const grouped = {};
+    list.forEach(p => { (grouped[p.zone] = grouped[p.zone] || []).push(p); });
+    pane.innerHTML = Object.entries(grouped).map(([zone, items]) => `
+      <div class="dr-sect">
+        <div class="dr-sect-t"><i class="ti ti-camera"></i>${esc(zoneLabels[zone]||zone)} (${items.length})</div>
+        <div class="ph-grid">
+          ${items.map(p => `<div class="ph-tile" onclick="openLightbox('${esc(p.publicUrl)}')"><img src="${esc(p.publicUrl)}" loading="lazy" alt=""></div>`).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    console.error('photos', e);
+    pane.innerHTML = `<div style="color:var(--rd);font-size:12px;padding:10px">Could not load photos: ${esc(e.message)}</div>`;
+  }
+}
+
+function openLightbox(url){ $('lb-img').src = url; $('lb-bk').classList.add('on'); }
+function closeLightbox(){ $('lb-bk').classList.remove('on'); $('lb-img').src=''; }
+
+// ── AUDIT (drawer & screen) ────────────────────────────────────────────────
+async function loadAuditForDocket(docketId){
+  const pane = $('dp-audit');
+  pane.innerHTML = `<div style="color:var(--mt);font-size:11px;padding:10px">Loading audit…</div>`;
+  try {
+    const { data, error } = await sb.from('audit_log').select('*').eq('docket_id', docketId).order('performed_at', { ascending:false });
+    if(error) throw error;
+    AUDIT_CACHE[docketId] = data||[];
+    if(!data || !data.length){ pane.innerHTML = `<div style="color:var(--mt);font-size:12px;padding:20px;text-align:center">No audit entries</div>`; return; }
+    pane.innerHTML = `<div class="dr-sect">${data.map(a => {
+      const who = (DRIVERS.find(d => d.id === a.performed_by)||{}).name || (a.performed_by ? 'user '+String(a.performed_by).slice(0,6) : '—');
+      return `<div class="audit-row">
+        <div class="a-when">${esc(fmtDT(a.performed_at))}</div>
+        <div><span class="a-action">${esc(a.action)}</span><span class="a-who">· ${esc(who)}</span></div>
+        ${a.notes?`<div class="a-notes">${esc(a.notes)}</div>`:''}
+      </div>`;
+    }).join('')}</div>`;
+  } catch(e){ pane.innerHTML = `<div style="color:var(--rd);font-size:12px;padding:10px">Could not load: ${esc(e.message)}</div>`; }
+}
+
+async function loadAuditLog(){
+  const body = $('al-body');
+  body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--mt)">Loading…</td></tr>`;
+  try {
+    const { data, error } = await sb.from('audit_log').select('*').order('performed_at', { ascending:false }).limit(500);
+    if(error) throw error;
+    const actionFilter = $('al-action').value;
+    const driverFilter = $('al-driver').value;
+    const rows = (data||[]).filter(a => {
+      if(actionFilter && !(a.action||'').toLowerCase().startsWith(actionFilter)) return false;
+      if(driverFilter && a.performed_by !== driverFilter) return false;
+      return true;
+    });
+    if(!rows.length){ body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--mt)">No matching entries</td></tr>`; return; }
+    body.innerHTML = rows.map(a => {
+      const who = (DRIVERS.find(d => d.id === a.performed_by)||{}).name || '—';
+      const docket = DOCKETS.find(x => x.id === a.docket_id);
+      const docketLabel = docket ? `${a.docket_id} — ${clientNameOf(docket)}` : (a.docket_id||'—');
+      return `<tr>
+        <td>${esc(fmtDT(a.performed_at))}</td>
+        <td>${esc(who)}</td>
+        <td><span class="pill grey">${esc(a.action||'—')}</span></td>
+        <td>${a.docket_id?`<a href="javascript:void(0)" onclick="openDrawer('${esc(a.docket_id)}')" style="color:var(--mc);font-weight:600;text-decoration:none">${esc(docketLabel)}</a>`:'—'}</td>
+        <td style="color:#555">${esc(a.notes||'')}</td>
+      </tr>`;
+    }).join('');
+  } catch(e){ body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--rd)">Could not load: ${esc(e.message)}</td></tr>`; }
+}
+
+// ── ACTIONS ────────────────────────────────────────────────────────────────
+async function logAudit(docketId, action, notes){
+  try {
+    await sb.from('audit_log').insert([{ docket_id: docketId, action, performed_by: currentUser?currentUser.id:null, notes: notes||null }]);
+  } catch(e){ console.warn('audit log', e); }
+}
+
+async function moveNext(docketId){
+  const d = DOCKETS.find(x => x.id === docketId); if(!d) return;
+  const next = Math.min(6, (d.stage||1) + 1);
+  if(next === d.stage) return;
+  try {
+    const { error } = await sb.from('dockets').update({ stage: next }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'moved:stage_'+next, 'Moved by office from stage '+d.stage+' to '+next);
+    showToast('Moved to '+ (STAGE_COLS.find(c=>c.n===next)||{}).label);
+  } catch(e){ showToast('Move failed: '+e.message); }
+}
+
+async function moveToInvoice(docketId){
+  const d = DOCKETS.find(x => x.id === docketId); if(!d) return;
+  if((d.stage||1) === 6) return;
+  try {
+    const { error } = await sb.from('dockets').update({ stage: 6 }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'invoiced', 'Marked invoiced by office');
+    showToast('Marked as Invoice');
+  } catch(e){ showToast('Action failed: '+e.message); }
+}
+
+async function reopenStage(docketId, key){
+  const d = DOCKETS.find(x => x.id === docketId); if(!d) return;
+  const reason = await askReason('Reopen ' + key, 'Clears the ' + key + ' signature. The docket will move back to that stage so the driver can resign.');
+  if(!reason) return;
+  const sigs = { ...(d.sigs||{}) };
+  delete sigs[key];
+  const backStage = { delivery:1, pickup:2, disposal:3 }[key] || 1;
+  try {
+    const { error } = await sb.from('dockets').update({ sigs, stage: Math.min(d.stage||1, backStage+1) === d.stage ? backStage+1 : backStage+1 }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'reopened:'+key, reason);
+    showToast(key+' reopened');
+  } catch(e){ showToast('Reopen failed: '+e.message); }
+}
+
+async function resetAllSigs(docketId){
+  const reason = await askReason('Reset all signatures', 'Clears delivery, pickup and disposal signatures. The docket will be moved back to stage 1 (Order received).');
+  if(!reason) return;
+  try {
+    const { error } = await sb.from('dockets').update({ sigs:{}, stage:1, submitted_at:null }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'reopened:all', reason);
+    showToast('All signatures cleared');
+  } catch(e){ showToast('Reset failed: '+e.message); }
+}
+
+// Void a docket that never actually happened (contract fell through, bin
+// pulled without going through the system, entered by mistake, etc.) — it
+// disappears from the active board but the row and its history stay in the
+// database for ISO 14001 / EPA audit-trail purposes. Not a hard delete.
+async function voidDocket(docketId){
+  const d = DOCKETS.find(x => x.id === docketId); if(!d) return;
+  const reason = await askReason('Void docket', 'Removes this docket from the active board and job lists. It is NOT deleted — the record stays in the system for your compliance records.');
+  if(!reason) return;
+  try {
+    const { error } = await sb.from('dockets').update({
+      voided: true, void_reason: reason, voided_at: new Date().toISOString(), voided_by: currentUser ? currentUser.id : null
+    }).eq('id', docketId);
+    if(error) throw error;
+    await logAudit(docketId, 'voided', reason);
+    closeDrawer();
+    await loadDocketsFromDB();
+    showToast('Docket voided');
+  } catch(e){ showToast('Void failed: '+e.message); }
+}
+
+// ── REASON MODAL ───────────────────────────────────────────────────────────
+function askReason(title, msg){
+  return new Promise(resolve => {
+    _reasonResolve = resolve;
+    $('rm-title').textContent = title;
+    $('rm-msg').textContent = msg;
+    $('rm-reason').value = '';
+    $('rm-err').classList.remove('show');
+    $('rm-bk').classList.add('on');
+    setTimeout(() => $('rm-reason').focus(), 60);
+  });
+}
+function confirmReason(){
+  const txt = $('rm-reason').value.trim();
+  if(!txt){ $('rm-err').textContent='Reason is required.'; $('rm-err').classList.add('show'); return; }
+  closeReasonModal(); if(_reasonResolve){ _reasonResolve(txt); _reasonResolve=null; }
+}
+function closeReasonModal(){
+  $('rm-bk').classList.remove('on');
+  if(_reasonResolve){ _reasonResolve(null); _reasonResolve=null; }
+}
+
+// ── CLIENTS SCREEN ─────────────────────────────────────────────────────────
+function renderClients(){
+  const showArch = $('cl-showArchived').checked;
+  const rows = CLIENTS.filter(c => showArch ? true : c.active);
+  const body = $('cl-body');
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--mt)">No clients</td></tr>`; return; }
+  body.innerHTML = rows.map(c => `
+    <tr>
+      <td><i class="ti ${esc(c.icon||'ti-building')}" style="color:var(--or);margin-right:6px"></i>${esc(c.name)}</td>
+      <td style="color:#555">${esc(c.contact||'—')}</td>
+      <td style="font-family:ui-monospace,Menlo,monospace;color:#555">${esc(c.short_code||'—')}</td>
+      <td><code style="font-size:11px;color:var(--mt)">${esc(c.icon||'—')}</code></td>
+      <td>${c.is_general?'<span class="pill orange">General</span>':'<span class="pill grey">Client</span>'}</td>
+      <td>${c.active?'<span class="pill green">Active</span>':'<span class="pill red">Archived</span>'}</td>
+      <td style="color:var(--mt)">${esc(fmtDate(c.created_at))}</td>
+      <td>
+        <button class="btn-s" onclick='openClientModal(${JSON.stringify(c.id)})'>Edit</button>
+        <button class="btn-s" onclick="toggleClientActive('${esc(c.id)}', ${c.active?'false':'true'})">${c.active?'Archive':'Restore'}</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+let _editingClientId = null;
+let _convertFromDocketId = null; // set when the modal was opened via "Convert to client folder"
+function openClientModal(id){
+  _editingClientId = id || null;
+  _convertFromDocketId = null;
+  $('cm-convert-note').style.display = 'none';
+  if(id){
+    const c = CLIENTS.find(x=>x.id===id);
+    if(!c) return;
+    $('cm-title').textContent = 'Edit client';
+    $('cm-name').value = c.name||'';
+    $('cm-contact').value = c.contact||'';
+    $('cm-code').value = c.short_code||'';
+    $('cm-icon').value = c.icon||'ti-building';
+    $('cm-general').checked = !!c.is_general;
+  } else {
+    $('cm-title').textContent = 'Add client';
+    $('cm-name').value=''; $('cm-contact').value=''; $('cm-code').value=''; $('cm-icon').value='ti-building'; $('cm-general').checked=false;
+  }
+  $('cm-err').classList.remove('show');
+  $('cm-bk').classList.add('on');
+}
+
+// Pre-fills the Add Client modal from a one-off General Skip Assignment
+// docket, so an office user can turn a customer who's become a regular
+// into a proper client folder without retyping their details.
+function openConvertToClientModal(docketId){
+  const d = DOCKETS.find(x => x.id === docketId);
+  if(!d || !d.oneoff_name) return;
+  openClientModal(null);
+  _convertFromDocketId = docketId;
+  $('cm-title').textContent = 'Convert to client folder';
+  $('cm-name').value = d.oneoff_name || '';
+  $('cm-contact').value = d.oneoff_contact || '';
+  $('cm-code').value = _slugify(d.oneoff_name);
+  $('cm-general').checked = false;
+  $('cm-convert-note').style.display = '';
+  $('cm-convert-note').innerHTML = '<i class="ti ti-info-circle"></i> This docket ('+esc(docketId)+') will move into the new folder. Older one-off jobs from '+esc(d.oneoff_name)+' stay under General Skip Assignment.';
+}
+
+function closeClientModal(){ $('cm-bk').classList.remove('on'); _editingClientId=null; _convertFromDocketId=null; }
+
+async function saveClient(){
+  const name = $('cm-name').value.trim();
+  const contact = $('cm-contact').value.trim();
+  const code = $('cm-code').value.trim().toLowerCase();
+  const icon = $('cm-icon').value;
+  const isGen = $('cm-general').checked;
+  const err = $('cm-err'); err.classList.remove('show');
+  if(!name || !code){ err.textContent='Name and short code are required.'; err.classList.add('show'); return; }
+  if(!/^[a-z0-9_-]+$/.test(code)){ err.textContent='Short code: lowercase letters, numbers, dash or underscore only.'; err.classList.add('show'); return; }
+  $('cm-save').disabled = true;
+  try {
+    let r;
+    if(_editingClientId){
+      r = await sb.from('clients').update({ name, contact: contact||null, short_code: code, icon, is_general: isGen }).eq('id', _editingClientId);
+    } else {
+      r = await sb.from('clients').insert([{ name, contact: contact||null, short_code: code, icon, is_general: isGen, active: true }]).select();
+    }
+    if(r.error) throw r.error;
+    const convertingDocketId = _convertFromDocketId;
+    const newClient = (!_editingClientId && r.data && r.data[0]) ? r.data[0] : null;
+    closeClientModal();
+    await loadClientsFromDB();
+    if(convertingDocketId && newClient){
+      const { error: linkErr } = await sb.from('dockets').update({
+        client_id: newClient.id, client_name: newClient.name, oneoff_name: null, oneoff_contact: null
+      }).eq('id', convertingDocketId);
+      if(linkErr){ showToast('Client created, but linking the docket failed: '+linkErr.message); }
+      else {
+        await loadDocketsFromDB();
+        if(activeDocket && activeDocket.id === convertingDocketId) refreshDrawer();
+        showToast('Converted — '+esc(newClient.name)+' now has their own folder.');
+      }
+    } else {
+      renderClients();
+      showToast(_editingClientId?'Client updated':'Client added');
+    }
+  } catch(e){ err.textContent='Save failed: '+e.message; err.classList.add('show'); }
+  finally { $('cm-save').disabled = false; }
+}
+
+async function toggleClientActive(id, active){
+  try {
+    const { error } = await sb.from('clients').update({ active }).eq('id', id);
+    if(error) throw error;
+    await loadClientsFromDB();
+    renderClients();
+    showToast(active?'Restored':'Archived');
+  } catch(e){ showToast('Failed: '+e.message); }
+}
+
+// ── DRIVERS SCREEN ─────────────────────────────────────────────────────────
+function renderDrivers(){
+  const showInactive = $('dr-showInactive').checked;
+  const rows = DRIVERS.filter(d => showInactive ? true : d.active);
+  const body = $('dr-body');
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mt)">No drivers yet</td></tr>`; return; }
+  body.innerHTML = rows.map(d => `
+    <tr>
+      <td><strong>${esc(d.name||'—')}</strong></td>
+      <td style="color:#555">${esc(d.phone||'—')}</td>
+      <td><span class="pill ${d.role==='office'?'blue':d.role==='admin'?'orange':'grey'}">${esc(d.role||'driver')}</span></td>
+      <td>${d.active?'<span class="pill green">Active</span>':'<span class="pill red">Inactive</span>'}</td>
+      <td>${d.sig_img?`<img src="${esc(d.sig_img)}" style="height:30px;max-width:90px;background:#fff;border:1px solid var(--bd);border-radius:4px;padding:2px">`:'<span style="color:var(--mt)">—</span>'}</td>
+      <td style="color:var(--mt)">${esc(fmtDate(d.created_at))}</td>
+      <td><button class="btn-s" onclick="toggleDriverActive('${esc(d.id)}', ${d.active?'false':'true'})">${d.active?'Deactivate':'Reactivate'}</button></td>
+    </tr>
+  `).join('');
+}
+
+async function toggleDriverActive(id, active){
+  try {
+    const { error } = await sb.from('drivers').update({ active }).eq('id', id);
+    if(error) throw error;
+    await loadDriversFromDB();
+    renderDrivers();
+    showToast(active?'Driver reactivated':'Driver deactivated');
+  } catch(e){ showToast('Failed: '+e.message); }
+}
+
+// ── NEW DOCKET PANEL ──────────────────────────────────────────────────────
+async function generateDocketIdFromDB(){
+  try {
+    const { count } = await sb.from('dockets').select('*', { count:'exact', head:true });
+    let n = (count || 0) + 1;
+    for(let i=0;i<200;i++){
+      const id = 'MCK-' + String(n+i).padStart(3,'0');
+      const { data } = await sb.from('dockets').select('id').eq('id', id).maybeSingle();
+      if(!data) return id;
+    }
+    return 'MCK-' + String(Date.now()).slice(-6);
+  } catch(e){ console.error('generateDocketIdFromDB', e); return 'MCK-' + String(Date.now()).slice(-6); }
+}
+
+let ndQuoteItems = [];
+const ND_WASTE_TYPES = ['Construction','Concrete','Green Waste','Fogo','Demolition (Building)','Steel/Metal','Timber','Domestic','Mixed','VENM','Hazardous'];
+let ndSelWasteTypes = new Set(['Construction']);   // multi-select waste types on New Docket — usually one, occasionally several
+function renderNdWasteTypePicker(){
+  const g = $('nd-wt-grid'); if(!g) return;
+  g.innerHTML = ND_WASTE_TYPES.map(t => '<button type="button" class="wt-btn'+(ndSelWasteTypes.has(t)?' sel':'')+'" onclick="toggleNdWasteType(\''+t.replace(/'/g,"\\'")+'\')">'+t+'</button>').join('');
+}
+function toggleNdWasteType(t){
+  if(ndSelWasteTypes.has(t)) { if(ndSelWasteTypes.size > 1) ndSelWasteTypes.delete(t); }
+  else ndSelWasteTypes.add(t);
+  renderNdWasteTypePicker();
+}
+renderNdWasteTypePicker();
+
+function toggleNdQuoteTray(){
+  const on = $('nd-is-quote').checked;
+  $('nd-quote-tray').style.display = on ? '' : 'none';
+  if(on && ndQuoteItems.length === 0) addNdQuoteItem();
+}
+function addNdQuoteItem(){ ndQuoteItems.push({ desc:'', qty:1, price:0 }); renderNdQuoteItems(); }
+function removeNdQuoteItem(i){ ndQuoteItems.splice(i,1); renderNdQuoteItems(); }
+function updateNdQuoteItem(i, field, val){
+  if(!ndQuoteItems[i]) return;
+  ndQuoteItems[i][field] = (field==='price'||field==='qty') ? (parseFloat(val)||0) : val;
+  renderNdQuoteItems();
+}
+// Line shape mirrors how these get re-keyed into Xero for the formal quote:
+// Qty × Price = Amount, same as Xero's own quote line items.
+function renderNdQuoteItems(){
+  const list = $('nd-qi-list'); if(!list) return;
+  list.innerHTML = ndQuoteItems.map((item,i) => {
+    const amount = (parseFloat(item.qty)||0) * (parseFloat(item.price)||0);
+    return `<div class="qi-row">
+      <input type="text" class="qi-desc" placeholder="e.g. Skip bin — base rate per m³" value="${esc(item.desc||'')}" oninput="updateNdQuoteItem(${i},'desc',this.value)">
+      <input type="number" class="qi-qty" placeholder="Qty" step="1" min="0" value="${item.qty===0?0:(item.qty||1)}" oninput="updateNdQuoteItem(${i},'qty',this.value)">
+      <input type="number" class="qi-price" placeholder="$" step="0.01" min="0" value="${item.price||''}" oninput="updateNdQuoteItem(${i},'price',this.value)">
+      <span class="qi-amt">$${amount.toFixed(2)}</span>
+      <button type="button" class="qi-rm" onclick="removeNdQuoteItem(${i})"><i class="ti ti-trash"></i></button>
+    </div>`;
+  }).join('');
+  updateNdQuoteTotal();
+}
+function updateNdQuoteTotal(){
+  const total = ndQuoteItems.reduce((s,it)=>s+((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)),0);
+  const el = $('nd-qi-total-v'); if(el) el.textContent = '$' + total.toFixed(2);
+}
+function renderNdQuotePhotoCount(){
+  const input = $('nd-quote-photos');
+  const n = input && input.files ? input.files.length : 0;
+  const el = $('nd-quote-photo-count');
+  if(el) el.textContent = n ? (n + ' photo' + (n!==1?'s':'') + ' selected') : '';
+}
+
+function openNewDocket(){
+  // Populate clients dropdown (active only, sorted)
+  const sel = $('nd-client');
+  const active = CLIENTS.filter(c => c.active).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  sel.innerHTML = '<option value="">— Select client —</option>' + active.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  sel.value = '';
+  $('nd-oneoff-name').value = '';
+  $('nd-oneoff-contact').value = '';
+  $('nd-oneoff-block').style.display = 'none';
+  $('nd-site').value = '';
+  // Default date = today
+  const dt = new Date();
+  const ymd = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+  $('nd-date').value = ymd;
+  $('nd-bintype').value = 'Skip Bin';
+  ndSelWasteTypes = new Set(['Construction']);
+  renderNdWasteTypePicker();
+  $('nd-comments').value = '';
+  $('nd-err').classList.remove('show');
+  $('nd-err').textContent = '';
+  $('nd-save').disabled = false;
+  $('nd-save-lbl').textContent = 'Save order';
+  $('nd-is-quote').checked = false;
+  $('nd-quote-tray').style.display = 'none';
+  ndQuoteItems = [];
+  renderNdQuoteItems();
+  $('nd-quote-notes').value = '';
+  $('nd-quote-photos').value = '';
+  renderNdQuotePhotoCount();
+  $('nd-bk').classList.add('on');
+  $('nd-drawer').classList.add('on');
+  // Listen for client change to toggle one-off block
+  sel.onchange = () => {
+    const c = CLIENTS.find(x => x.id === sel.value);
+    const isGen = c && (c.is_general || /general/i.test(c.name||''));
+    $('nd-oneoff-block').style.display = isGen ? '' : 'none';
+  };
+  setTimeout(() => sel.focus(), 80);
+}
+
+function closeNewDocket(){
+  $('nd-bk').classList.remove('on');
+  $('nd-drawer').classList.remove('on');
+}
+
+async function saveNewDocket(){
+  const err = $('nd-err'); err.classList.remove('show'); err.textContent = '';
+  const clientId = $('nd-client').value;
+  const client = CLIENTS.find(c => c.id === clientId);
+  const site = $('nd-site').value.trim();
+  const date = $('nd-date').value || null;
+  const binType = $('nd-bintype').value;
+  const wasteType = [...ndSelWasteTypes].join(', ');
+  const comments = $('nd-comments').value.trim();
+  const oneoffName = $('nd-oneoff-name').value.trim();
+  const oneoffContact = $('nd-oneoff-contact').value.trim();
+  if(!client){ err.textContent = 'Please pick a client / folder.'; err.classList.add('show'); return; }
+  if(!site){ err.textContent = 'Site / location is required.'; err.classList.add('show'); return; }
+  const isGen = client.is_general || /general/i.test(client.name||'');
+  if(isGen && !oneoffName){ err.textContent = 'One-off client name is required for General Skip Assignment.'; err.classList.add('show'); return; }
+
+  const isQuote = $('nd-is-quote').checked;
+  const quoteItems = isQuote ? ndQuoteItems.filter(it => (it.desc && it.desc.trim()) || (parseFloat(it.price)||0) > 0) : [];
+  const quoteNotes = isQuote ? ($('nd-quote-notes').value.trim() || null) : null;
+  const quotePhotoFiles = isQuote ? Array.from($('nd-quote-photos').files || []) : [];
+
+  $('nd-save').disabled = true;
+  $('nd-save-lbl').textContent = 'Saving…';
+  try {
+    const id = await generateDocketIdFromDB();
+    const displayName = isGen ? oneoffName : client.name;
+    const row = {
+      id,
+      client_id: client.id,
+      client_name: displayName,
+      oneoff_name: isGen ? oneoffName : null,
+      oneoff_contact: isGen ? (oneoffContact || null) : null,
+      site,
+      date,
+      bin_type: binType,
+      waste_type: wasteType,
+      comments: comments || null,
+      stage: 1,
+      is_quote: isQuote,
+      quote_items: quoteItems,
+      quote_notes: quoteNotes,
+      created_by: currentUser ? currentUser.id : null
+    };
+    const { error: insErr } = await sb.from('dockets').insert([row]);
+    if(insErr) throw insErr;
+    for(const file of quotePhotoFiles){
+      try {
+        const path = id + '/quote_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '.jpg';
+        const { error: upErr } = await sb.storage.from('docket-photos').upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false });
+        if(upErr) throw upErr;
+        await sb.from('photos').insert([{ docket_id: id, zone: 'quote', storage_path: path, uploaded_by: currentUser ? currentUser.id : null }]);
+      } catch(e){ console.error('quote photo upload', e); }
+    }
+    try {
+      await sb.from('audit_log').insert([{
+        docket_id: id,
+        action: isQuote ? 'quote_created' : 'order_created',
+        action_type: 'create',
+        performed_by: currentUser ? currentUser.id : null,
+        notes: 'Created in office app'
+      }]);
+    } catch(e){ console.warn('audit log (order_created) failed', e); }
+    closeNewDocket();
+    showToast((isQuote ? 'Quotation ' : 'Order ') + id + ' saved.' + (isQuote ? '' : ' Awaiting delivery driver.'));
+    // Realtime will refresh the board; force-load too in case the subscription is slow
+    loadDocketsFromDB();
+  } catch(e){
+    err.textContent = 'Save failed: ' + (e.message || e);
+    err.classList.add('show');
+    $('nd-save').disabled = false;
+    $('nd-save-lbl').textContent = 'Save order';
+  }
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+async function init(){
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if(!session){ showLogin(); return; }
+    const driver = await loadCurrentUser(session.user.id);
+    if(!driver){
+      // No profile row — needs to register an office profile
+      showLogin();
+      loginTab('register');
+      const e=$('rg-email'); if(e){ e.value=session.user.email||''; e.disabled=true; }
+      const p=$('rg-password'); if(p) p.disabled=true;
+      showToast('Complete your office profile to continue.');
+      return;
+    }
+    if(driver.role !== 'office' && driver.role !== 'admin'){
+      await sb.auth.signOut();
+      showLogin();
+      showToast('That account is a driver account. Office access only — contact admin.');
+      return;
+    }
+    setCurrentUser(driver, session.user.email);
+    hideLogin();
+    await loadClientsFromDB();
+    await loadDriversFromDB();
+    await loadDocketsFromDB();
+    // Preload NCR count for sidebar badge (non-blocking on error)
+    try {
+      const { data: ncData } = await sb.from('nonconformances').select('id,status');
+      NCRS = ncData || [];
+      const openCount = NCRS.filter(n => n.status !== 'closed').length;
+      const bdg = $('bdg-ncrs'); if(bdg) bdg.textContent = openCount;
+    } catch(e){ console.warn('NCR preload', e); }
+    subscribeToRealtime();
+    bootApp();
+  } catch(e){
+    console.error('init', e);
+    showToast('Startup error: '+(e.message||e));
+    showLogin();
+  }
+}
+
+function bootApp(){
+  // Wire toolbar filters
+  $('fl-client').onchange = e => { _filters.client = e.target.value; renderBoard(); };
+  $('fl-from').onchange   = e => { _filters.from   = e.target.value; renderBoard(); };
+  $('fl-to').onchange     = e => { _filters.to     = e.target.value; renderBoard(); };
+  $('fl-search').oninput  = e => { _filters.search = e.target.value.trim(); renderBoard(); };
+  $('cl-showArchived').onchange = renderClients;
+  $('dr-showInactive').onchange = renderDrivers;
+  $('al-action').onchange = loadAuditLog;
+  $('al-driver').onchange = loadAuditLog;
+  const ncS = $('nc-status'); if(ncS) ncS.onchange = renderNCRs;
+  const ncQ = $('nc-search'); if(ncQ) ncQ.oninput = renderNCRs;
+  const vnQ = $('vn-search'); if(vnQ) vnQ.oninput = renderVENM;
+  const isQ = $('is-search'); if(isQ) isQ.oninput = renderISO;
+  showScreen('dockets');
+}
+
+let _lastAuthEvent = 0;
+sb.auth.onAuthStateChange((event, session) => {
+  // Debounce: ignore events firing within 2s of each other to prevent reload loops on flaky networks
+  const now = Date.now();
+  if (event === 'SIGNED_IN' && now - _lastAuthEvent < 2000) return;
+  _lastAuthEvent = now;
+  if(event === 'SIGNED_OUT'){ currentUser = null; showLogin(); }
+  if(event === 'SIGNED_IN'){ init(); }  // re-init instead of full page reload
+});
+
+// ── PDF GENERATION ─────────────────────────────────────────────────────────
+async function _urlToDataURL(url){
+  try {
+    const r = await fetch(url);
+    if(!r.ok) return null;
+    const blob = await r.blob();
+    return await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch(e){ return null; }
+}
+
+// The Snowy Skips logo lives beside this file as office/logo.png — fetched
+// once and cached as a data URL rather than embedding a giant base64 string
+// directly in this file (a single ~100,000-character line previously broke
+// GitHub's web editor for the driver app — see driver/index.html history).
+let _logoDataUrlCache = null;
+async function _getLogoDataUrl(){
+  if(_logoDataUrlCache) return _logoDataUrlCache;
+  _logoDataUrlCache = await _urlToDataURL('logo.png');
+  return _logoDataUrlCache;
+}
+
+// Convert hex (#RRGGBB) → [r,g,b]
+function _hex(h){ h = h.replace('#',''); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; }
+
+// Format date Dashpivot-style: "Jun 7, 2024"
+function _dpDate(s){
+  if(!s) return '';
+  const dt = new Date(s);
+  if(isNaN(dt)){
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(m){
+      const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return M[parseInt(m[2],10)-1] + ' ' + parseInt(m[3],10) + ', ' + m[1];
+    }
+    return String(s);
+  }
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return M[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear();
+}
+
+// Format full timestamp Dashpivot-style: "Tue, Jun 7 2024 9:00 AM"
+function _dpDT(s){
+  if(!s) return '';
+  const dt = new Date(s);
+  if(isNaN(dt)) return String(s);
+  const D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h = dt.getHours(), m = dt.getMinutes();
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if(h === 0) h = 12;
+  const mm = m < 10 ? '0' + m : '' + m;
+  return D[dt.getDay()] + ', ' + M[dt.getMonth()] + ' ' + dt.getDate() + ' ' + dt.getFullYear() + ' ' + h + ':' + mm + ' ' + ap;
+}
+
+function _slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'docket'; }
+
+function _imgSize(src){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth||800, h: img.naturalHeight||600 });
+    img.onerror = () => resolve({ w: 800, h: 600 });
+    img.src = src;
+  });
+}
+
+// Generates the "Quotation" PDF for a docket created via the quote tray
+// (is_quote = true) — line items + total + site photos, no delivery/
+// pickup/disposal sections since those genuinely haven't happened yet.
+// Deliberately a separate, simpler generator from generateDocketPDF() rather
+// than another branch of it — a quote has no stages, no signatures, no
+// compliance section, so reusing that engine would mean threading a lot of
+// "is this a quote" conditionals through code built for a very different
+// document shape.
+async function generateQuotePDF(docketId){
+  if(!window.jspdf || !window.jspdf.jsPDF){ showToast('PDF library not loaded'); return; }
+  showToast('Generating quotation…');
+  try {
+    const { data: docket, error: dErr } = await sb.from('dockets').select('*').eq('id', docketId).single();
+    if(dErr) throw dErr;
+    if(!docket){ showToast('Docket not found'); return; }
+
+    const { data: photoRows } = await sb.from('photos').select('*').eq('docket_id', docketId).eq('zone','quote').order('uploaded_at', { ascending:true });
+    const photoDataUrls = [];
+    for(const p of (photoRows||[])){
+      const { data: pub } = sb.storage.from('docket-photos').getPublicUrl(p.storage_path);
+      const dataUrl = await _urlToDataURL(pub.publicUrl);
+      if(dataUrl) photoDataUrls.push(dataUrl);
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const M = 15, PW = 210, PH = 297;
+    const GREEN = _hex('#4C7A4F'), DARK = _hex('#1A1A1A'), GREY = _hex('#666666'), LIGHTC = _hex('#E8EBE6');
+    let cursorY = M;
+    function ensureSpace(h){ if(cursorY + h > PH - 20){ doc.addPage(); cursorY = M; } }
+
+    const logoUrl = await _getLogoDataUrl();
+    if(logoUrl){ try { doc.addImage(logoUrl, 'PNG', M, cursorY, 18, 18); } catch(e){} }
+    doc.setTextColor.apply(doc, DARK);
+    doc.setFont('helvetica','bold'); doc.setFontSize(18);
+    doc.text('QUOTATION', M + 24, cursorY + 8);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.setTextColor.apply(doc, GREY);
+    doc.text('McKimm Civil Pty Ltd · trading as Snowy Skips', M + 24, cursorY + 14);
+    doc.setDrawColor.apply(doc, GREEN); doc.setLineWidth(0.6);
+    doc.line(M, cursorY + 22, PW - M, cursorY + 22);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.setTextColor.apply(doc, DARK);
+    doc.text('Quote ' + docket.id, PW - M, cursorY + 4, { align:'right' });
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.setTextColor.apply(doc, GREY);
+    doc.text(_dpDate(docket.date || docket.created_at) || new Date().toLocaleDateString('en-AU'), PW - M, cursorY + 9, { align:'right' });
+    cursorY += 30;
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor.apply(doc, DARK);
+    doc.text('Prepared for', M, cursorY);
+    cursorY += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text(docket.oneoff_name || clientNameOf(docket), M, cursorY); cursorY += 5;
+    doc.setFontSize(9); doc.setTextColor.apply(doc, GREY);
+    doc.text(docket.site || '—', M, cursorY); cursorY += 5;
+    if(docket.oneoff_contact){ doc.text(docket.oneoff_contact, M, cursorY); cursorY += 5; }
+    doc.text((docket.bin_type||'—') + ' · ' + (docket.waste_type||'—'), M, cursorY); cursorY += 10;
+
+    const items = (docket.quote_items && docket.quote_items.length) ? docket.quote_items : [{desc:'(no items added)', qty:0, price:0}];
+    const rows = items.map(it => {
+      const qty = parseFloat(it.qty)||0, price = parseFloat(it.price)||0;
+      return [it.desc || '—', qty || '—', '$' + price.toFixed(2), '$' + (qty*price).toFixed(2)];
+    });
+    const total = items.reduce((s,it)=>s+((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)),0);
+    doc.autoTable({
+      startY: cursorY,
+      margin: { left: M, right: M },
+      head: [['Description','Qty','Price','Amount']],
+      body: rows,
+      foot: [['', '', 'Total (excl. GST)', '$' + total.toFixed(2)]],
+      theme: 'plain',
+      styles: { font:'helvetica', fontSize:9, textColor: DARK, cellPadding: 3 },
+      headStyles: { fillColor: GREEN, textColor: [255,255,255], fontStyle:'bold' },
+      footStyles: { fillColor: LIGHTC, textColor: DARK, fontStyle:'bold' },
+      columnStyles: { 1: { halign:'right', cellWidth: 18 }, 2: { halign:'right', cellWidth: 28 }, 3: { halign:'right', cellWidth: 30 } }
+    });
+    cursorY = doc.lastAutoTable.finalY + 10;
+
+    if(docket.quote_notes){
+      ensureSpace(20);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor.apply(doc, DARK);
+      doc.text('Notes', M, cursorY); cursorY += 5;
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, GREY);
+      const noteLines = doc.splitTextToSize(docket.quote_notes, PW - 2*M);
+      doc.text(noteLines, M, cursorY);
+      cursorY += noteLines.length * 4.5 + 6;
+    }
+
+    if(photoDataUrls.length){
+      ensureSpace(14);
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor.apply(doc, DARK);
+      doc.text('Site photos', M, cursorY); cursorY += 6;
+      const gap = 6;
+      const colW = (PW - 2*M - gap) / 2;
+      const maxH = 55;
+      for(let i=0;i<photoDataUrls.length;i+=2){
+        const rowUrls = photoDataUrls.slice(i, i+2);
+        const sizes = await Promise.all(rowUrls.map(u => _imgSize(u)));
+        let rowH = 0;
+        const dims = sizes.map(s => {
+          const ratio = s.w ? (s.h/s.w) : 0.75;
+          let w = colW, h = w*ratio;
+          if(h > maxH){ h = maxH; w = h/ratio; }
+          rowH = Math.max(rowH, h);
+          return {w,h};
+        });
+        ensureSpace(rowH + gap);
+        rowUrls.forEach((u, idx) => {
+          const x = M + idx*(colW+gap);
+          try { doc.addImage(u, 'JPEG', x, cursorY, dims[idx].w, dims[idx].h); } catch(e){}
+        });
+        cursorY += rowH + gap;
+      }
+    }
+
+    ensureSpace(18);
+    doc.setDrawColor.apply(doc, LIGHTC); doc.setLineWidth(0.3);
+    doc.line(M, cursorY, PW - M, cursorY); cursorY += 5;
+    doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
+    const disc = 'This quotation is an estimate based on the site visit and photos attached above, and is valid for 30 days from the date above. Pricing and scope cover only the items and quantities shown in these photos — items not visible here, discovered later, or added after this visit may incur additional charges. A formal quote and invoice will follow separately. Full job documentation — delivery, pickup and disposal records — will be provided once the job has been completed.';
+    const discLines = doc.splitTextToSize(disc, PW - 2*M);
+    doc.text(discLines, M, cursorY);
+
+    const totalPages = doc.internal.getNumberOfPages();
+    for(let p=1;p<=totalPages;p++){
+      doc.setPage(p);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor.apply(doc, GREY);
+      doc.text('Snowy Skips — Quotation ' + docket.id, M, PH - 10);
+      doc.text('Page ' + p + ' of ' + totalPages, PW - M, PH - 10, { align:'right' });
+    }
+
+    const clientSlug = _slugify(docket.oneoff_name || clientNameOf(docket));
+    const ymd = new Date().toISOString().slice(0,10);
+    doc.save('Snowy-Skips-Quote-' + docket.id + '-' + clientSlug + '-' + ymd + '.pdf');
+    showToast('Done — quotation downloaded.');
+  } catch(e){
+    console.error('generateQuotePDF', e);
+    showToast('Could not generate quotation: ' + e.message);
+  }
+}
+
+async function generateDocketPDF(docketId, copyType){
+  if(!window.jspdf || !window.jspdf.jsPDF){ showToast('PDF library not loaded'); return; }
+  showToast('Generating PDF…');
+  try {
+    const { data: docket, error: dErr } = await sb.from('dockets').select('*').eq('id', docketId).single();
+    if(dErr) throw dErr;
+    if(!docket){ showToast('Docket not found'); return; }
+
+    const clientObj = CLIENTS.find(c => c.id === docket.client_id) || null;
+    const clientName = clientNameOf(docket);
+    const clientFolder = clientObj ? clientObj.name : (docket.client_name || docket.oneoff_name || 'General');
+    const clientSlug = _slugify(clientObj ? (clientObj.short_code || clientObj.name) : (docket.oneoff_name || 'general'));
+
+    const { data: photoRows } = await sb.from('photos').select('*').eq('docket_id', docketId).order('uploaded_at', { ascending:true });
+    const photos = (photoRows||[]).map(p => {
+      const { data: pub } = sb.storage.from('docket-photos').getPublicUrl(p.storage_path);
+      return { zone: p.zone, publicUrl: pub.publicUrl };
+    });
+
+    let audit = [];
+    if(copyType === 'internal'){
+      const { data: auditRows } = await sb.from('audit_log').select('*').eq('docket_id', docketId).order('performed_at', { ascending:true });
+      audit = auditRows || [];
+    }
+
+    // All photos for every zone are embedded — no per-zone cap — since they're
+    // now shown together as one gallery at the bottom of the report (see
+    // "Photos" section below) rather than a few thumbnails per section.
+    const zonesNeeded = ['arr','pu','tip','rec'];
+    const photoData = {};
+    await Promise.all(zonesNeeded.map(async (z) => {
+      const all = photos.filter(p => p.zone === z);
+      photoData[z] = { extra: 0, items: [] };
+      for(const p of all){
+        const dataUrl = await _urlToDataURL(p.publicUrl);
+        if(dataUrl) photoData[z].items.push(dataUrl);
+      }
+    }));
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'mm', format:'a4', compress:true });
+    const PW = 210, PH = 297, M = 18;
+    const HDR_H = 26, FTR_H = 18;
+    const BODY_TOP = HDR_H + 4;
+    const BODY_BOTTOM = PH - FTR_H;
+
+    // TEAL is the brand accent used throughout every helper below (section
+    // dots, pill outlines, table headers, header/footer rules) — repointed
+    // to the Snowy Skips logo's green rather than renaming every call site.
+    const TEAL = _hex('#4C7A4F');
+    const GREY = _hex('#666666');
+    const DARK = _hex('#1A1A1A');
+    const LIGHT = _hex('#E8EBE6');
+    const TABLE_HEAD_BG = TEAL;
+
+    const logoDataUrl = await _getLogoDataUrl();
+    const printedAtStr = _dpDT(new Date());
+
+    let cursorY = BODY_TOP;
+
+    function drawHeader(){
+      const lx = M, ly = 8;
+      // Thin brand-colour accent stripe across the very top of every page.
+      doc.setFillColor.apply(doc, TEAL);
+      doc.rect(0, 0, PW, 1.6, 'F');
+
+      // Logo in a circular outline badge.
+      doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.3);
+      doc.circle(lx + 7, ly + 6.5, 8.2, 'S');
+      if(logoDataUrl){
+        try { doc.addImage(logoDataUrl, 'PNG', lx + 0.8, ly + 1.6, 12.4, 9.8); } catch(e){}
+      }
+
+      doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.2);
+      doc.line(lx + 18, ly - 2, lx + 18, ly + 15);
+
+      doc.setTextColor.apply(doc, DARK); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+      doc.text('WASTE TRACKING WORKFLOW', lx + 22, ly + 4.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      doc.setTextColor.apply(doc, GREY);
+      doc.text('McKimm Civil Pty Ltd  ·  trading as Snowy Skips', lx + 22, ly + 9.5);
+
+      const rx = PW - M;
+      doc.setDrawColor.apply(doc, TEAL); doc.setLineWidth(0.3);
+      doc.roundedRect(rx - 32, ly - 2, 32, 8, 3, 3, 'S');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      doc.setTextColor.apply(doc, TEAL);
+      doc.text(docket.id || '', rx - 16, ly + 3, { align:'center' });
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+      doc.setTextColor.apply(doc, GREY);
+      doc.text((copyType === 'client' ? 'Client copy' : 'Internal copy'), rx, ly + 10.5, { align:'right' });
+
+      doc.setDrawColor.apply(doc, LIGHT);
+      doc.setLineWidth(0.25);
+      doc.line(M, HDR_H, PW - M, HDR_H);
+      doc.setLineWidth(0.2);
+    }
+
+    function drawFooter(){
+      doc.setDrawColor.apply(doc, TEAL);
+      doc.setLineWidth(0.6);
+      doc.line(M, PH - FTR_H + 4, PW - M, PH - FTR_H + 4);
+      doc.setLineWidth(0.2);
+      const ftrY = PH - FTR_H + 9;
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      doc.text('Printed version is uncontrolled', M, ftrY);
+      const totalPages = doc.internal.getNumberOfPages();
+      const curPage = doc.internal.getCurrentPageInfo().pageNumber;
+      doc.text('Page ' + curPage + ' of ' + totalPages, M, ftrY + 4);
+      doc.text('This PDF was created at', PW - M, ftrY, { align:'right' });
+      doc.text(printedAtStr, PW - M, ftrY + 4, { align:'right' });
+      doc.setFontSize(6.5);
+      doc.text('McKimm Civil Pty Ltd trading as Snowy Skips · NSW EPA waste tracking', PW/2, ftrY + 8, { align:'center' });
+    }
+
+    function newPage(){ doc.addPage(); drawHeader(); cursorY = BODY_TOP; }
+    function ensureSpace(needed){ if(cursorY + needed > BODY_BOTTOM) newPage(); }
+
+    function drawSectionTitle(title){
+      ensureSpace(11);
+      doc.setFillColor.apply(doc, TEAL);
+      doc.circle(M + 1.3, cursorY + 2.1, 1.3, 'F');
+      doc.setTextColor.apply(doc, DARK);
+      doc.setFont('helvetica','bold'); doc.setFontSize(12);
+      doc.text(title, M + 6, cursorY + 3);
+      cursorY += 6;
+      doc.setDrawColor.apply(doc, LIGHT);
+      doc.setLineWidth(0.3);
+      doc.line(M, cursorY, PW - M, cursorY);
+      cursorY += 4;
+      doc.setLineWidth(0.2);
+    }
+
+    function drawDescription(text){
+      const lines = doc.splitTextToSize(text, PW - 2*M);
+      ensureSpace(lines.length * 4 + 4);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9);
+      doc.text(lines, M, cursorY + 3);
+      cursorY += lines.length * 4 + 4;
+    }
+
+    function drawSubsection(text){
+      ensureSpace(7);
+      doc.setTextColor.apply(doc, DARK);
+      doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.text(text, M, cursorY + 4);
+      cursorY += 6;
+    }
+
+    function drawTable(headers, row, opts){
+      opts = opts || {};
+      ensureSpace(20);
+      const colCount = headers.length;
+      const usableW = PW - 2*M;
+      const colWidths = opts.colWidths || Array(colCount).fill(usableW / colCount);
+      const columnStyles = {};
+      colWidths.forEach((w, i) => { columnStyles[i] = { cellWidth: w }; });
+      doc.autoTable({
+        head: [headers],
+        body: [row],
+        startY: cursorY,
+        margin: { left: M, right: M },
+        styles: { font:'helvetica', fontSize: 9, cellPadding: 2.4, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign: 'middle' },
+        headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8.5, halign:'left' },
+        bodyStyles: { fillColor:[255,255,255] },
+        columnStyles,
+        theme: 'grid',
+        tableWidth: usableW,
+        pageBreak: 'auto',
+        rowPageBreak: 'avoid'
+      });
+      cursorY = doc.lastAutoTable.finalY + 4;
+    }
+
+    function drawPill(text, x, yPos){
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      const txtW = doc.getTextWidth(text);
+      const pillW = txtW + 8, pillH = 6;
+      doc.setDrawColor.apply(doc, TEAL); doc.setLineWidth(0.3);
+      doc.roundedRect(x, yPos - pillH + 1.2, pillW, pillH, pillH/2, pillH/2, 'S');
+      doc.setTextColor.apply(doc, TEAL);
+      doc.text(text, x + pillW/2, yPos - 0.4, { align:'center' });
+      return pillW;
+    }
+
+    function drawLabelPill(label, value){
+      ensureSpace(10);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text(label, M, cursorY + 4);
+      const labelW = doc.getTextWidth(label);
+      drawPill(value, M + labelW + 6, cursorY + 5, TEAL);
+      cursorY += 8;
+    }
+
+    function drawPillRow(label, values){
+      if(!values || !values.length) return;
+      ensureSpace(10);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text(label, M, cursorY + 4);
+      let x = M + doc.getTextWidth(label) + 6;
+      values.forEach(v => {
+        const w = drawPill(String(v), x, cursorY + 5, TEAL);
+        x += w + 3;
+        if(x > PW - M - 20){ cursorY += 7; x = M + doc.getTextWidth(label) + 6; ensureSpace(8); }
+      });
+      cursorY += 8;
+    }
+
+    function drawSignatureBlock(label, sig){
+      ensureSpace(34);
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.text(label, M, cursorY + 4);
+      cursorY += 5;
+      const boxX = M, boxY = cursorY, boxW = 70, boxH = 22;
+      doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.3);
+      doc.rect(boxX, boxY, boxW, boxH);
+      const sigImg = sig && (sig.sig_img || sig.sigImg);
+      if(sigImg){
+        try { doc.addImage(sigImg, 'PNG', boxX + 2, boxY + 2, boxW - 4, boxH - 4); }
+        catch(e){ try { doc.addImage(sigImg, 'JPEG', boxX + 2, boxY + 2, boxW - 4, boxH - 4); } catch(e2){} }
+      } else {
+        doc.setTextColor.apply(doc, GREY);
+        doc.setFont('helvetica','italic'); doc.setFontSize(9);
+        doc.text('—', boxX + boxW/2, boxY + boxH/2 + 1, { align:'center' });
+      }
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.setTextColor.apply(doc, DARK);
+      const by = (sig && sig.by) ? String(sig.by) : '—';
+      doc.text(by, boxX, boxY + boxH + 5);
+      doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
+      const at = (sig && sig.at) ? String(sig.at) : '';
+      if(at) doc.text(_dpDT(at), boxX, boxY + boxH + 9);
+      cursorY = boxY + boxH + 13;
+    }
+
+    async function drawPhotoStrip(zone, label){
+      const pd = photoData[zone];
+      if(!pd || !pd.items.length) return;
+      ensureSpace(40);
+      if(label){
+        doc.setTextColor.apply(doc, GREY);
+        doc.setFont('helvetica','normal'); doc.setFontSize(9);
+        doc.text(label, M, cursorY + 3);
+        cursorY += 5;
+      }
+      const tileW = 36, tileH = 28, gap = 3;
+      let x = M;
+      pd.items.forEach(src => {
+        if(x + tileW > PW - M){ x = M; cursorY += tileH + gap; ensureSpace(tileH + gap); }
+        try { doc.addImage(src, 'JPEG', x, cursorY, tileW, tileH); }
+        catch(e){ try { doc.addImage(src, 'PNG', x, cursorY, tileW, tileH); } catch(e2){} }
+        doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.2);
+        doc.rect(x, cursorY, tileW, tileH);
+        x += tileW + gap;
+      });
+      cursorY += tileH + 3;
+      if(pd.extra > 0){
+        doc.setTextColor.apply(doc, GREY); doc.setFont('helvetica','italic'); doc.setFontSize(8);
+        doc.text('+ ' + pd.extra + ' more photo(s) in office records', M, cursorY + 3);
+        cursorY += 5;
+      }
+    }
+
+    function drawLockedNotice(){
+      ensureSpace(16);
+      doc.setFillColor(244,248,248);
+      doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.3);
+      doc.roundedRect(M, cursorY, PW - 2*M, 12, 1, 1, 'FD');
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.text('[Locked]  The fields above are locked since the form is signed. The office can clear the signatures to unlock.', M + 3, cursorY + 7);
+      cursorY += 16;
+    }
+
+    drawHeader();
+    cursorY = BODY_TOP;
+
+    // The document title now lives in the header itself ("Waste Tracking
+    // Workflow"), so this intro strip is just creator + form-number +
+    // template metadata — no separate giant page title needed.
+    ensureSpace(16);
+    const creator = DRIVERS.find(d => d.id === docket.created_by) || DRIVERS.find(d => d.id === docket.submitted_by);
+    const creatorName = creator ? creator.name : 'Driver';
+    const creatorInit = initials(creatorName);
+    const avX = M + 4.5, avY = cursorY + 1;
+    doc.setFillColor.apply(doc, TEAL);
+    doc.circle(avX, avY + 4, 4.5, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.text(creatorInit, avX, avY + 5.4, { align:'center' });
+    doc.setTextColor.apply(doc, DARK);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text(creatorName, avX + 8, avY + 3);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+    doc.setTextColor.apply(doc, GREY);
+    const createdLine = 'Created ' + (_dpDT(docket.created_at) || '—');
+    doc.text(createdLine, avX + 8, avY + 7);
+    cursorY += 13;
+
+    ensureSpace(8);
+    doc.setTextColor.apply(doc, GREY);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    doc.text('Automated Form Number', M, cursorY + 4);
+    doc.setTextColor.apply(doc, DARK);
+    const autoNum = 'McKimm Civil Pty Ltd-Snowy Skips-' + clientFolder + '-MCK-Waste Disposal-' + (docket.id || '');
+    doc.text(autoNum, M + 48, cursorY + 4);
+    cursorY += 6;
+
+    doc.setTextColor.apply(doc, GREY);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+    doc.text('Template MCK-Waste Disposal · v64   |   Form v3.4   |   Filepath: McKimm Civil Pty Ltd / Snowy Skips / ' + clientFolder, M, cursorY + 4);
+    cursorY += 8;
+
+    doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.3);
+    doc.line(M, cursorY, PW - M, cursorY);
+    cursorY += 4;
+
+    drawSectionTitle('Docket Instructions');
+    drawDescription(
+      'A new Docket is required for each Skip Bin, IBC or Truck allocated to a Site. ' +
+      'Each entry must have a unique Waste Disposal receipt from the Landfill Site. ' +
+      'Do not add extra Bins using the "Blue Plus" icon — Start a new Docket. ' +
+      'All fields must be entered, unless noted in the section Instructions. ' +
+      'Contact Administration if a Location is not in the list.'
+    );
+
+    drawSectionTitle('Date / Location');
+    drawTable(['Date','Location'], [_dpDate(docket.date), docket.site || '—']);
+
+    drawSectionTitle('Waste Amount');
+    drawDescription('The following Table will automatically fill upon completion of the Waste Disposal Section of this form.');
+    drawTable(
+      ['Recorded Net Weight (Tonnes)','Recorded Cubic Metres','Landfill Site'],
+      [
+        docket.weight != null ? Number(docket.weight).toFixed(2) : '—',
+        docket.cbm != null ? Number(docket.cbm).toFixed(2) : '—',
+        docket.facility || '—'
+      ]
+    );
+
+    drawSectionTitle('Order Details');
+    drawDescription('Insert the basic details as supplied by the Client for the Waste Pickup.');
+    drawSubsection('Order Received');
+    if(docket.oneoff_name || docket.oneoff_contact){
+      drawTable(['Client','Contact'], [docket.oneoff_name || clientName, docket.oneoff_contact || '—']);
+    }
+    drawTable(
+      ['Bin Type','Request Date','Proposed Waste Type','Comments'],
+      [docket.bin_type || '—', _dpDate(docket.date), docket.waste_type || '—', docket.comments || '—']
+    );
+    const sigs = docket.sigs || {};
+    drawSignatureBlock('Signature of Allocating Staff', sigs.order || sigs.delivery || null);
+
+    drawSectionTitle('Delivery Instructions');
+    drawDescription(
+      'Upon arrival at a Site, provide the details in the form and sign upon completion. ' +
+      'Vehicle registration is recorded for the Truck making the delivery, and the Bin number must be recorded. ' +
+      'Only provide an image if waste at pickup can be observed. Sign when completed.'
+    );
+    drawSubsection('Skip Bin Delivery / Truck Arrival');
+    const deliveryDriver = (sigs.delivery && sigs.delivery.by) || creatorName;
+    drawTable(
+      ['Delivery/Driver','Arrival Date','Arrival Time','Vehicle Registration','Bins'],
+      [
+        deliveryDriver,
+        _dpDate(docket.arr_date),
+        docket.arr_time || '—',
+        docket.rego || '—',
+        (docket.bins_delivered||[]).map(b=>'#'+b).join(', ') || '—'
+      ],
+      { colWidths: [38, 30, 26, 36, 44] }
+    );
+    drawLabelPill('Site Allocation', docket.bin_type || 'Truck');
+    drawSignatureBlock('Driver Signature at Delivery / Arrival', sigs.delivery);
+
+    drawSectionTitle('Pickup');
+    drawDescription(
+      'Employees must record the time of skip waste pickup or when a truck has been loaded. ' +
+      'This includes an image of the loaded skip or truck and identifying which bin is ready for disposal. ' +
+      'Employees must estimate the percentage of waste in each load based upon the categories given, eg concrete 30%, construction 70%. ' +
+      'The total must not be greater or less than 100%. If VENM waste is identified, the VENM Certificate must also be filled.'
+    );
+    drawSubsection('Waste Pickup Recording');
+    drawTable(
+      ['Pickup Date','Pickup Time','Vehicle Registration','Site Allocation','Bins','Comments'],
+      [
+        _dpDate(docket.pu_date),
+        docket.pu_time || '—',
+        docket.pu_rego || '—',
+        docket.bin_type || '—',
+        (docket.bins_picked_up||[]).map(b=>'#'+b).join(', ') || '—',
+        docket.comments || '—'
+      ],
+      { colWidths: [26, 22, 30, 26, 36, 34] }
+    );
+    const pcts = docket.waste_pcts || {};
+    const pctEntries = Object.entries(pcts).filter(([,v]) => v && Number(v) > 0);
+    if(pctEntries.length){
+      drawPillRow('Waste Type', pctEntries.map(([k]) => k.charAt(0).toUpperCase() + k.slice(1)));
+      pctEntries.forEach(([k,v]) => {
+        const kCap = k.charAt(0).toUpperCase() + k.slice(1);
+        drawLabelPill(kCap + ' %', String(v) + '%');
+      });
+    }
+    if(pcts.venm && Number(pcts.venm) > 0){
+      ensureSpace(12);
+      doc.setFillColor(254,248,232);
+      doc.setDrawColor(232,170,40); doc.setLineWidth(0.3);
+      doc.roundedRect(M, cursorY, PW - 2*M, 9, 1, 1, 'FD');
+      doc.setTextColor.apply(doc, DARK);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text('VENM Detected — NATA Certificate Required', M + 3, cursorY + 6);
+      cursorY += 12;
+    }
+    drawSignatureBlock('Signature upon Pickup', sigs.pickup);
+
+    drawSectionTitle('Waste Disposal');
+    drawDescription(
+      'Employees must photograph the unloaded waste at the disposal facility. ' +
+      'The Disposal fields must be completed by using the data identified in the Landfill receipt. ' +
+      'The receipt must be photographed and kept for audit purposes.'
+    );
+    drawSubsection('Disposal Recording');
+    drawTable(
+      ['Disposal Date','Disposal Time','Disposal Facility','Net Weight (t)','Cubic Metres (m³)'],
+      [
+        _dpDate(docket.dis_date),
+        docket.dis_time || '—',
+        docket.facility || '—',
+        docket.weight != null ? Number(docket.weight).toFixed(2) : '—',
+        docket.cbm != null ? Number(docket.cbm).toFixed(2) : '—'
+      ],
+      { colWidths: [28, 24, 50, 30, 32] }
+    );
+    drawSignatureBlock('Signature upon Disposal', sigs.disposal);
+
+    if(sigs.delivery || sigs.pickup || sigs.disposal){
+      drawLockedNotice();
+    }
+
+    // All photos for this docket, grouped by the stage they were taken at,
+    // gathered into one gallery at the bottom of the report — matches the
+    // Sitemate/Dashpivot convention of a single photo appendix rather than
+    // thumbnails scattered through each section.
+    drawSectionTitle('Photos');
+    const totalPhotos = photos.length;
+    if(totalPhotos > 0){
+      await drawPhotoStrip('arr', 'Waste Image at Arrival');
+      await drawPhotoStrip('pu', 'Waste Pickup (Loaded)');
+      await drawPhotoStrip('tip', 'Disposal Facility Receipt / Tip Photos');
+      await drawPhotoStrip('rec', 'Recycling Photos');
+    } else {
+      doc.setTextColor.apply(doc, GREY);
+      doc.setFont('helvetica','italic'); doc.setFontSize(9);
+      doc.text('No photos attached to this docket.', M, cursorY + 4);
+      cursorY += 8;
+    }
+
+    if(copyType === 'internal'){
+      drawSectionTitle('Compliance — ISO 14001:2026 / NSW EPA');
+      const retainBase = docket.submitted_at || docket.created_at;
+      const retain = retainBase ? new Date(retainBase) : new Date();
+      retain.setFullYear(retain.getFullYear() + 7);
+      const retainStr = _dpDate(retain);
+      drawTable(
+        ['EPA Waste Classification','Disposal Outcome','Diversion %','Retain Until'],
+        [
+          docket.epa_classification || docket.waste_type || '—',
+          docket.disposal_outcome || (docket.facility && /recycl/i.test(docket.facility) ? 'Recycled' : 'Landfill'),
+          docket.diversion_pct != null ? Number(docket.diversion_pct).toFixed(0) + '%' : '0%',
+          retainStr
+        ]
+      );
+      drawTable(
+        ['Facility EPA Licence','Compliance Notes'],
+        [
+          docket.facility_epa_licence || '—',
+          docket.compliance_notes || '—'
+        ],
+        { colWidths: [60, PW - 2*M - 60] }
+      );
+
+      // Load NCs + VENM certs for this docket
+      let ncList = [];
+      let venmList = [];
+      try {
+        const { data: ncRows } = await sb.from('nonconformances').select('*').eq('docket_id', docketId).order('created_at', { ascending:true });
+        ncList = ncRows || [];
+      } catch(e){ console.warn('PDF nc load', e); }
+      try {
+        const { data: vnRows } = await sb.from('venm_certificates').select('*').eq('docket_id', docketId).order('created_at', { ascending:true });
+        venmList = vnRows || [];
+      } catch(e){ console.warn('PDF venm load', e); }
+
+      drawSubsection('Nonconformances');
+      if(ncList.length){
+        doc.autoTable({
+          head: [['Status','Stage','Description','Corrective Action','Responsible','Created']],
+          body: ncList.map(nc => [
+            nc.status === 'closed' ? 'Closed' : 'Open',
+            nc.stage || '—',
+            nc.description || '—',
+            nc.corrective_action || '—',
+            nc.responsible_person || '—',
+            _dpDate(nc.created_at)
+          ]),
+          startY: cursorY,
+          margin: { left: M, right: M },
+          styles: { font:'helvetica', fontSize: 8, cellPadding: 1.8, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign:'top' },
+          headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8, halign:'left' },
+          columnStyles: { 0:{cellWidth:18}, 1:{cellWidth:20}, 2:{cellWidth:54}, 3:{cellWidth:50}, 4:{cellWidth:24}, 5:{cellWidth:PW - 2*M - 166} },
+          theme: 'grid',
+          rowPageBreak: 'avoid'
+        });
+        cursorY = doc.lastAutoTable.finalY + 4;
+      } else {
+        doc.setTextColor.apply(doc, GREY); doc.setFont('helvetica','italic'); doc.setFontSize(9);
+        doc.text('No nonconformances raised against this docket.', M, cursorY + 4);
+        cursorY += 6;
+      }
+
+      const isVENM = (docket.waste_type === 'VENM') || (docket.epa_classification && /VENM/i.test(docket.epa_classification));
+      if(venmList.length || isVENM){
+        drawSubsection('VENM certificates');
+        if(venmList.length){
+          doc.autoTable({
+            head: [['Cert Number','NATA Lab','Lab Ref','Test Date','Notes']],
+            body: venmList.map(v => [
+              v.cert_number || '—',
+              v.nata_lab || '—',
+              v.lab_reference || '—',
+              _dpDate(v.test_date),
+              v.notes || '—'
+            ]),
+            startY: cursorY,
+            margin: { left: M, right: M },
+            styles: { font:'helvetica', fontSize: 8, cellPadding: 1.8, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign:'top' },
+            headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8, halign:'left' },
+            columnStyles: { 0:{cellWidth:34}, 1:{cellWidth:48}, 2:{cellWidth:30}, 3:{cellWidth:24}, 4:{cellWidth:PW - 2*M - 136} },
+            theme: 'grid',
+            rowPageBreak: 'avoid'
+          });
+          cursorY = doc.lastAutoTable.finalY + 4;
+        } else {
+          ensureSpace(12);
+          doc.setFillColor(254,248,232);
+          doc.setDrawColor(232,170,40); doc.setLineWidth(0.3);
+          doc.roundedRect(M, cursorY, PW - 2*M, 9, 1, 1, 'FD');
+          doc.setTextColor.apply(doc, DARK);
+          doc.setFont('helvetica','bold'); doc.setFontSize(9);
+          doc.text('VENM waste classified — NATA certificate(s) required but none on file.', M + 3, cursorY + 6);
+          cursorY += 12;
+        }
+      }
+
+      if(docket.has_nc && !ncList.length){
+        ensureSpace(14);
+        doc.setFillColor(252,232,232);
+        doc.setDrawColor(196,80,80); doc.setLineWidth(0.3);
+        doc.roundedRect(M, cursorY, PW - 2*M, 10, 1, 1, 'FD');
+        doc.setTextColor.apply(doc, DARK);
+        doc.setFont('helvetica','bold'); doc.setFontSize(9);
+        doc.text('Non-conformance flagged on docket — refer to NC register for details.', M + 3, cursorY + 6.5);
+        cursorY += 13;
+      }
+
+      const sub = DRIVERS.find(d => d.id === docket.submitted_by);
+      drawTable(
+        ['Created By','Created At','Submitted By','Submitted At','Stage'],
+        [
+          creatorName,
+          _dpDT(docket.created_at),
+          sub ? sub.name : '—',
+          _dpDT(docket.submitted_at),
+          String(docket.stage || 1) + ' / 6'
+        ],
+        { colWidths: [32, 44, 32, 44, 16] }
+      );
+
+      drawSectionTitle('Audit Log');
+      if(audit.length){
+        const auditRows = audit.map(a => {
+          const who = (DRIVERS.find(d => d.id === a.performed_by)||{}).name || (a.performed_by ? 'user ' + String(a.performed_by).slice(0,6) : '—');
+          return [_dpDT(a.performed_at), who, String(a.action || ''), String(a.notes || '')];
+        });
+        doc.autoTable({
+          head: [['When','Who','Action','Notes']],
+          body: auditRows,
+          startY: cursorY,
+          margin: { left: M, right: M },
+          styles: { font:'helvetica', fontSize: 8, cellPadding: 1.8, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK, valign: 'top' },
+          headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8, halign:'left' },
+          bodyStyles: { fillColor:[255,255,255] },
+          columnStyles: { 0:{cellWidth: 40}, 1:{cellWidth: 26}, 2:{cellWidth: 40}, 3:{cellWidth: PW - 2*M - 106} },
+          theme: 'grid',
+          rowPageBreak: 'avoid'
+        });
+        cursorY = doc.lastAutoTable.finalY + 4;
+      } else {
+        doc.setTextColor.apply(doc, GREY); doc.setFont('helvetica','italic'); doc.setFontSize(9);
+        doc.text('No audit entries recorded.', M, cursorY + 4);
+        cursorY += 6;
+      }
+    }
+
+    const total = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= total; i++){
+      doc.setPage(i);
+      drawFooter();
+    }
+
+    const ymd = (function(){
+      const dt = docket.date ? new Date(docket.date) : new Date();
+      const yyyy = dt.getFullYear();
+      const mm = String(dt.getMonth()+1).padStart(2,'0');
+      const dd = String(dt.getDate()).padStart(2,'0');
+      return '' + yyyy + mm + dd;
+    })();
+    const variantLabel = copyType === 'internal' ? 'Internal' : 'Client';
+    const filename = 'Snowy-Skips-' + docket.id + '-' + clientSlug + '-' + ymd + '-' + variantLabel + '.pdf';
+    doc.save(filename);
+    showToast('Done — downloaded ' + filename);
+
+    try {
+      await sb.from('audit_log').insert([{
+        docket_id: docketId,
+        action: 'pdf_generated:' + copyType,
+        action_type: 'export',
+        performed_by: currentUser && currentUser.id ? currentUser.id : null,
+        notes: filename
+      }]);
+    } catch(e){ console.warn('audit insert (pdf) failed', e); }
+  } catch(e){
+    console.error('generateDocketPDF', e);
+    showToast('PDF error: ' + (e.message || e));
+  }
+}
+
+// Watchdog — if init stalls, force login visible
+setTimeout(() => {
+  const lo = $('lo');
+  const app = $('app');
+  const appHidden = app && !app.classList.contains('shown');
+  const loHidden = lo && lo.classList.contains('hidden');
+  if(loHidden && appHidden){
+    console.warn('init watchdog: forcing login screen visible');
+    showLogin();
+  }
+}, 8000);
+
+init();
+</script>
+
+</body>
+</html>
