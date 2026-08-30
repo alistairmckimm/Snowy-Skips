@@ -2143,11 +2143,21 @@ function askReason(title, msg){
 function confirmReason(){
   const txt = $('rm-reason').value.trim();
   if(!txt){ $('rm-err').textContent='Reason is required.'; $('rm-err').classList.add('show'); return; }
-  closeReasonModal(); if(_reasonResolve){ _reasonResolve(txt); _reasonResolve=null; }
+  // Hide the modal directly and resolve with the typed reason WITHOUT going
+  // through closeReasonModal() — that function also resolves the pending
+  // promise (with null, for the Cancel/X case), and since _reasonResolve is
+  // a single shared variable, calling it first here nulled the resolver out
+  // from under this function's own resolve call right below it. Net effect:
+  // every "Confirm" on this modal (Void docket, Reset all signatures, Reopen
+  // delivery/pickup/disposal) silently resolved as if Cancelled — the typed
+  // reason was captured but never delivered, so the action never ran and
+  // nothing looked wrong (no error), it just quietly did nothing.
+  $('rm-bk').classList.remove('on');
+  if(_reasonResolve){ const resolve = _reasonResolve; _reasonResolve = null; resolve(txt); }
 }
 function closeReasonModal(){
   $('rm-bk').classList.remove('on');
-  if(_reasonResolve){ _reasonResolve(null); _reasonResolve=null; }
+  if(_reasonResolve){ const resolve = _reasonResolve; _reasonResolve = null; resolve(null); }
 }
 
 // ── CLIENTS SCREEN ─────────────────────────────────────────────────────────
