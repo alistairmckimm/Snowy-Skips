@@ -13,7 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--mc:#0a2240;--or:#e8611a;--tl:#1D9E75;--rd:#A32D2D;--am:#854F0B;--bg:#eef1f5;--card:#fff;--bd:#e3e6ec;--mt:#7b8494}
@@ -253,7 +253,7 @@ table.t tbody tr:hover{background:#f7f9fc}
 .cmp-empty{padding:14px;text-align:center;color:var(--mt);font-size:11px;font-style:italic}
 .qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
 .qr-card{border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center;background:#fff;break-inside:avoid}
-.qr-card canvas{max-width:100%;height:auto}
+.qr-card canvas,.qr-card img{max-width:100%;height:auto}
 .qr-label{margin-top:6px;font-weight:700;font-size:13px}
 @media print{
   .sb,.topbar,.kb-toolbar,#binmap-empty{display:none !important}
@@ -1086,12 +1086,12 @@ async function generateBinQRCodes(){
   if(to - from > 200){ showToast('That\'s a lot of codes at once — try 200 or fewer per batch.'); return; }
   const nums = [];
   for(let n = from; n <= to; n++) nums.push(n);
-  grid.innerHTML = nums.map(n => `<div class="qr-card"><canvas id="qr-c-${n}"></canvas><div class="qr-label">Bin #${n}</div></div>`).join('');
-  for(const n of nums){
+  grid.innerHTML = nums.map(n => `<div class="qr-card"><div class="qr-canvas" id="qr-c-${n}"></div><div class="qr-label">Bin #${n}</div></div>`).join('');
+  nums.forEach(n => {
     const url = DRIVER_APP_URL + '?bin=' + n;
-    try { await QRCode.toCanvas($('qr-c-'+n), url, { width: 140, margin: 1 }); }
+    try { new QRCode($('qr-c-'+n), { text: url, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M }); }
     catch(e){ console.error('QR render failed for bin', n, e); }
-  }
+  });
 }
 
 // ── SCREEN SWITCH ──────────────────────────────────────────────────────────
