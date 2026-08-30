@@ -11,6 +11,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--mc:#0a2240;--or:#e8611a;--tl:#1D9E75;--rd:#A32D2D;--am:#854F0B;--bg:#eef1f5;--card:#fff;--bd:#e3e6ec;--mt:#7b8494}
@@ -248,6 +251,17 @@ table.t tbody tr:hover{background:#f7f9fc}
 .find-row .fr-rm{background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px;padding:2px 5px;font-family:inherit}
 .find-row .fr-rm:hover{background:#fbe1e0;border-radius:5px}
 .cmp-empty{padding:14px;text-align:center;color:var(--mt);font-size:11px;font-style:italic}
+.qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.qr-card{border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center;background:#fff;break-inside:avoid}
+.qr-card canvas{max-width:100%;height:auto}
+.qr-label{margin-top:6px;font-weight:700;font-size:13px}
+@media print{
+  .sb,.topbar,.kb-toolbar,#binmap-empty{display:none !important}
+  body,.app,.main{overflow:visible !important;height:auto !important;background:#fff !important}
+  .scr{display:none !important}
+  .scr.active{display:block !important;position:static !important}
+  #binqr-print{display:grid !important}
+}
 
 /* small screens */
 @media(max-width:900px){
@@ -283,6 +297,9 @@ table.t tbody tr:hover{background:#f7f9fc}
       <div class="sb-item active" id="nav-dockets" onclick="showScreen('dockets')"><i class="ti ti-clipboard-list"></i><span>Dockets</span><span class="sb-badge" id="bdg-dockets">0</span></div>
       <div class="sb-item" id="nav-clients" onclick="showScreen('clients')"><i class="ti ti-building"></i><span>Clients</span></div>
       <div class="sb-item" id="nav-drivers" onclick="showScreen('drivers')"><i class="ti ti-users"></i><span>Drivers</span></div>
+      <div class="sb-sec">Operations</div>
+      <div class="sb-item" id="nav-binmap" onclick="showScreen('binmap')"><i class="ti ti-map-pin"></i><span>Bin map</span></div>
+      <div class="sb-item" id="nav-binqr" onclick="showScreen('binqr')"><i class="ti ti-qrcode"></i><span>Bin QR codes</span></div>
       <div class="sb-sec">Compliance</div>
       <div class="sb-item" id="nav-ncrs" onclick="showScreen('ncrs')"><i class="ti ti-alert-triangle"></i><span>Nonconformances</span><span class="sb-badge" id="bdg-ncrs">0</span></div>
       <div class="sb-item" id="nav-venm" onclick="showScreen('venm')"><i class="ti ti-certificate"></i><span>VENM certificates</span></div>
@@ -338,6 +355,32 @@ table.t tbody tr:hover{background:#f7f9fc}
           <tbody id="cl-body"></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- BIN MAP SCREEN -->
+    <section class="scr" id="scr-binmap">
+      <div class="kb-toolbar">
+        <span class="sm" style="color:var(--mt)">Pins show every skip bin currently out on site (delivered, not yet picked up). Click a pin for details.</span>
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="renderBinMap()"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
+      <div id="binmap-empty" class="cmp-empty" style="display:none">No bins currently out with a mapped location. A site needs to be geocoded (saved on a docket) and that docket's bin needs to be delivered but not yet picked up.</div>
+      <div id="binmap-canvas" style="flex:1;border-radius:10px;overflow:hidden;border:1px solid var(--bd);margin:0 18px 18px"></div>
+    </section>
+
+    <!-- BIN QR CODES SCREEN -->
+    <section class="scr" id="scr-binqr">
+      <div class="kb-toolbar">
+        <label>From bin #</label>
+        <input type="number" id="qr-from" placeholder="1" style="width:90px">
+        <label>To bin #</label>
+        <input type="number" id="qr-to" placeholder="40" style="width:90px">
+        <button class="btn-p" onclick="generateBinQRCodes()"><i class="ti ti-qrcode"></i> Generate</button>
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="window.print()"><i class="ti ti-printer"></i> Print</button>
+      </div>
+      <div class="sm" style="color:var(--mt);margin-bottom:10px">Each code opens the driver app straight into whatever job that bin is currently on. Print these onto weatherproof labels and stick one on each bin.</div>
+      <div id="binqr-print" class="qr-grid"></div>
     </section>
 
     <!-- DRIVERS SCREEN -->
@@ -939,6 +982,118 @@ function aggregateWasteStats(dockets){
 }
 function initials(name){ if(!name) return '?'; return name.trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase(); }
 
+// ── BIN LOCATION MAP ─────────────────────────────────────────────────────────
+// Turns a typed "site" address into map coordinates via OpenStreetMap's free
+// Nominatim geocoder (no API key/account needed — good enough accuracy for
+// real street addresses; occasionally misses very rural/unusual ones). Called
+// whenever a docket's site is set or changed (see saveNewDocket/saveDetailsEdit).
+// Best-effort only: a failed/empty lookup just means that docket won't show a
+// pin on the Bin map — it never blocks saving the docket itself.
+async function geocodeSite(siteText){
+  const q = (siteText||'').trim();
+  if(!q) return null;
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=au&q=' + encodeURIComponent(q);
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if(!res.ok) return null;
+    const arr = await res.json();
+    if(!arr || !arr.length) return null;
+    const lat = parseFloat(arr[0].lat), lng = parseFloat(arr[0].lon);
+    if(!isFinite(lat) || !isFinite(lng)) return null;
+    return { lat, lng };
+  } catch(e){ console.warn('geocodeSite failed', e); return null; }
+}
+// True when a Supabase write failed specifically because the site_lat/site_lng
+// columns don't exist yet (migration_007 not run) — lets callers strip those
+// fields and retry rather than failing the whole docket save over a missing
+// map column.
+function isMissingMapColumnsError(msg){
+  return /site_lat|site_lng/i.test(msg||'');
+}
+let _mapColumnsMissingLogged = false;
+function warnMapColumnsMissingOnce(){
+  if(_mapColumnsMissingLogged) return;
+  _mapColumnsMissingLogged = true;
+  console.warn('Bin map: site_lat/site_lng columns not found — run migration_007_bin_location.sql in Supabase to enable the Bin map.');
+}
+
+let _binMap = null, _binMapMarkers = [];
+function renderBinMap(){
+  const canvas = $('binmap-canvas'), empty = $('binmap-empty');
+  if(!canvas) return;
+  // Bins "currently out" = delivered (stage 2) and not voided — stage 1 has no
+  // bin on site yet, stage ≥3 means pickup has already happened.
+  const active = DOCKETS.filter(d => !d.voided && (d.stage||1) === 2 && d.site_lat != null && d.site_lng != null);
+  if(!_binMap){
+    _binMap = L.map('binmap-canvas');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(_binMap);
+  }
+  _binMapMarkers.forEach(m => _binMap.removeLayer(m));
+  _binMapMarkers = [];
+  if(!active.length){
+    empty.style.display = '';
+    _binMap.setView([-36.3, 148.6], 10); // default view centred near Jindabyne/Snowy Monaro
+    setTimeout(() => _binMap.invalidateSize(), 50);
+    return;
+  }
+  empty.style.display = 'none';
+  // Group dockets at (near enough) the same coordinates under one pin so a
+  // site with several bins out doesn't stack identical markers.
+  const groups = {};
+  active.forEach(d => {
+    const key = d.site_lat.toFixed(4) + ',' + d.site_lng.toFixed(4);
+    (groups[key] = groups[key] || []).push(d);
+  });
+  const bounds = [];
+  Object.values(groups).forEach(list => {
+    const d0 = list[0];
+    const marker = L.marker([d0.site_lat, d0.site_lng]).addTo(_binMap);
+    const rows = list.map(d => {
+      const bins = (d.bins_delivered||[]).map(b=>'#'+b).join(', ') || '—';
+      const who = d.oneoff_name || d.client_name || '—';
+      return `<div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #eee">
+        <div style="font-weight:600">${esc(who)}</div>
+        <div>Bins: ${esc(bins)}</div>
+        <div>Delivered: ${esc(d.arr_date || d.date || '—')}${d.rego ? ' · '+esc(d.rego) : ''}</div>
+        <div style="color:#888">${esc(d.id)}</div>
+      </div>`;
+    }).join('');
+    marker.bindPopup(`<div style="font-size:12px;max-width:220px"><div style="font-weight:700;margin-bottom:6px">${esc(d0.site||'Site')}</div>${rows}</div>`);
+    _binMapMarkers.push(marker);
+    bounds.push([d0.site_lat, d0.site_lng]);
+  });
+  if(bounds.length === 1) _binMap.setView(bounds[0], 14);
+  else _binMap.fitBounds(bounds, { padding: [30,30] });
+  setTimeout(() => _binMap.invalidateSize(), 50);
+}
+
+// ── BIN QR CODES ─────────────────────────────────────────────────────────────
+// A QR code just encodes a link to the LIVE driver app with ?bin=<N> — see
+// driver/index.html's handleBinQRParam() for what happens when it's scanned:
+// it jumps straight into whatever active job currently has that bin out.
+const DRIVER_APP_URL = 'https://alistairmckimm.github.io/Snowy-Skips/driver/';
+async function generateBinQRCodes(){
+  const from = parseInt($('qr-from').value, 10);
+  const to = parseInt($('qr-to').value, 10);
+  const grid = $('binqr-print');
+  if(!isFinite(from) || !isFinite(to) || from < 1 || to < from){
+    showToast('Enter a valid bin number range.');
+    return;
+  }
+  if(to - from > 200){ showToast('That\'s a lot of codes at once — try 200 or fewer per batch.'); return; }
+  const nums = [];
+  for(let n = from; n <= to; n++) nums.push(n);
+  grid.innerHTML = nums.map(n => `<div class="qr-card"><canvas id="qr-c-${n}"></canvas><div class="qr-label">Bin #${n}</div></div>`).join('');
+  for(const n of nums){
+    const url = DRIVER_APP_URL + '?bin=' + n;
+    try { await QRCode.toCanvas($('qr-c-'+n), url, { width: 140, margin: 1 }); }
+    catch(e){ console.error('QR render failed for bin', n, e); }
+  }
+}
+
 // ── SCREEN SWITCH ──────────────────────────────────────────────────────────
 function showScreen(s){
   activeScreen = s;
@@ -946,7 +1101,7 @@ function showScreen(s){
   $('scr-'+s).classList.add('active');
   document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
   const navEl = $('nav-'+s); if(navEl) navEl.classList.add('active');
-  const titles = { dockets:'Dockets', clients:'Clients', drivers:'Drivers', audit:'Audit log', settings:'Settings', ncrs:'Nonconformances', venm:'VENM certificates', iso:'ISO 14001 audits' };
+  const titles = { dockets:'Dockets', clients:'Clients', drivers:'Drivers', audit:'Audit log', settings:'Settings', ncrs:'Nonconformances', venm:'VENM certificates', iso:'ISO 14001 audits', binmap:'Bin map', binqr:'Bin QR codes' };
   $('tb-title').textContent = titles[s] || s;
   if(s==='dockets') renderBoard();
   if(s==='clients') renderClients();
@@ -955,6 +1110,7 @@ function showScreen(s){
   if(s==='ncrs') loadNCRs();
   if(s==='venm') loadVENM();
   if(s==='iso') loadISO();
+  if(s==='binmap') renderBinMap();
 }
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
@@ -1367,8 +1523,26 @@ async function saveDetailsEdit(docketId){
     patch.oneoff_name = txt('dr-e-oneoff-name');
     patch.oneoff_contact = txt('dr-e-oneoff-contact');
   }
+  // Re-geocode only when the site text actually changed, to avoid a needless
+  // lookup (and possibly overwriting a good pin) on every unrelated edit.
+  const prevSite = activeDocket ? (activeDocket.site || null) : undefined;
+  if(patch.site !== prevSite){
+    if(patch.site){
+      const geo = await geocodeSite(patch.site);
+      patch.site_lat = geo ? geo.lat : null;
+      patch.site_lng = geo ? geo.lng : null;
+    } else {
+      patch.site_lat = null;
+      patch.site_lng = null;
+    }
+  }
   try {
-    const { error } = await sb.from('dockets').update(patch).eq('id', docketId);
+    let { error } = await sb.from('dockets').update(patch).eq('id', docketId);
+    if(error && isMissingMapColumnsError(error.message)){
+      warnMapColumnsMissingOnce();
+      delete patch.site_lat; delete patch.site_lng;
+      ({ error } = await sb.from('dockets').update(patch).eq('id', docketId));
+    }
     if(error) throw error;
     await logAudit(docketId, 'edited:office-details', patch);
     drDetailsEditing = false;
@@ -2609,6 +2783,7 @@ async function saveNewDocket(){
   try {
     const id = await generateDocketIdFromDB();
     const displayName = isGen ? oneoffName : client.name;
+    const geo = await geocodeSite(site); // best-effort — powers the Bin map, never blocks the save
     const row = {
       id,
       client_id: client.id,
@@ -2616,6 +2791,8 @@ async function saveNewDocket(){
       oneoff_name: isGen ? oneoffName : null,
       oneoff_contact: isGen ? (oneoffContact || null) : null,
       site,
+      site_lat: geo ? geo.lat : null,
+      site_lng: geo ? geo.lng : null,
       date,
       bin_type: binType,
       waste_type: wasteType,
@@ -2626,7 +2803,14 @@ async function saveNewDocket(){
       quote_notes: quoteNotes,
       created_by: currentUser ? currentUser.id : null
     };
-    const { error: insErr } = await sb.from('dockets').insert([row]);
+    let { error: insErr } = await sb.from('dockets').insert([row]);
+    if(insErr && isMissingMapColumnsError(insErr.message)){
+      // migration_007 hasn't been run yet — drop the map columns and retry so
+      // the order still saves; the Bin map just won't have this site plotted.
+      warnMapColumnsMissingOnce();
+      delete row.site_lat; delete row.site_lng;
+      ({ error: insErr } = await sb.from('dockets').insert([row]));
+    }
     if(insErr) throw insErr;
     for(const file of quotePhotoFiles){
       try {
