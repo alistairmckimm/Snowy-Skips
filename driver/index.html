@@ -55,6 +55,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .search-bar i{font-size:16px;color:#bbb;flex-shrink:0}
 .search-bar input{border:none;background:transparent;font-size:14px;color:#1a1a1a;flex:1;outline:none;font-family:inherit}
 
+.bin-jump-bar{margin:0 14px 10px;display:flex;align-items:center;gap:8px;background:#fff;border-radius:11px;padding:9px 12px;border:1px solid #e0e0e0}
+.bin-jump-bar i{font-size:16px;color:#bbb;flex-shrink:0}
+.bin-jump-bar input{border:none;background:transparent;font-size:14px;color:#1a1a1a;flex:1;outline:none;font-family:inherit;-moz-appearance:textfield}
+.bin-jump-bar input::-webkit-outer-spin-button,.bin-jump-bar input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.bin-jump-bar button{background:var(--or);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0}
+.bin-jump-bar button:active{opacity:0.85}
+
 /* FOLDER LIST */
 .folder-item{display:flex;align-items:center;gap:12px;padding:13px 16px;background:#fff;border-bottom:0.5px solid #f0f0f0;cursor:pointer}
 .folder-item:active{background:#f7f7f7}
@@ -330,6 +337,11 @@ canvas{display:none}
     <div class="search-bar">
       <i class="ti ti-search"></i>
       <input type="text" placeholder="Search jobs, bins, clients..." oninput="searchJobs(this.value)" id="search-input">
+    </div>
+    <div class="bin-jump-bar">
+      <i class="ti ti-qrcode"></i>
+      <input type="number" inputmode="numeric" placeholder="QR won't scan? Enter bin #" id="bin-jump-input" onkeydown="if(event.key==='Enter'){jumpToBinNumberManual();}">
+      <button onclick="jumpToBinNumberManual()">Go</button>
     </div>
     <div id="folder-list"></div>
   </div>
@@ -778,7 +790,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-30.1';
+const APP_BUILD = 'build 2026-08-30.2';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -2180,14 +2192,10 @@ function findJobByBinNumber(binNum){
   // "out" right now); fall back to any active job that mentions this bin.
   return jobs.find(j => isOut(j) && notPickedUp(j)) || jobs.find(isOut) || null;
 }
-function handleBinQRParam(){
-  const params = new URLSearchParams(window.location.search);
-  const bin = params.get('bin');
-  if(!bin) return;
-  // Strip it from the URL so a refresh/back navigation doesn't re-trigger the jump.
-  const cleanUrl = new URL(window.location.href);
-  cleanUrl.searchParams.delete('bin');
-  window.history.replaceState({}, '', cleanUrl.toString());
+// Shared by both the QR scan path and the manual "Enter bin #" fallback below
+// (for when a bin's printed code is damaged/unscannable) — same lookup, same
+// jump-straight-into-the-job behaviour either way.
+function openJobByBinNumber(bin){
   const job = findJobByBinNumber(bin);
   if(job){
     continueJob(job.id);
@@ -2196,6 +2204,26 @@ function handleBinQRParam(){
     showTab('jobs');
     showToast('Bin ' + bin + ' isn\'t on an active job right now.');
   }
+}
+function handleBinQRParam(){
+  const params = new URLSearchParams(window.location.search);
+  const bin = params.get('bin');
+  if(!bin) return;
+  // Strip it from the URL so a refresh/back navigation doesn't re-trigger the jump.
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('bin');
+  window.history.replaceState({}, '', cleanUrl.toString());
+  openJobByBinNumber(bin);
+}
+// Manual fallback on the Folders screen — "QR won't scan? Enter bin #" + Go.
+function jumpToBinNumberManual(){
+  const el = document.getElementById('bin-jump-input');
+  if(!el) return;
+  const bin = el.value.trim();
+  if(!bin){ showToast('Enter a bin number first.'); return; }
+  el.value = '';
+  el.blur();
+  openJobByBinNumber(bin);
 }
 
 let _lastAuthEvent = 0;
