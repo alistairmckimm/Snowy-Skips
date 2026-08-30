@@ -778,7 +778,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-29.3';
+const APP_BUILD = 'build 2026-08-30.1';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -2162,7 +2162,40 @@ async function init() {
     await loadJobsFromDB();
     subscribeToRealtime();
     bootApp();
+    handleBinQRParam();
   } catch(e) { console.error('init', e); showToast('Startup error: '+(e.message||e)); }
+}
+
+// ── BIN QR CODE SCAN HANDLING ──────────────────────────────────────────────
+// Each bin has a printed QR code encoding a link like .../driver/?bin=14 (see
+// office/index.html's "Bin QR codes" screen). Scanning it opens this URL,
+// which — once jobs are loaded — jumps straight into whatever active job
+// currently has that bin out, at whatever stage it's up to. If the bin isn't
+// on any active job right now, we say so rather than guessing.
+function findJobByBinNumber(binNum){
+  const target = String(binNum).trim();
+  const isOut = j => (j.bins_del||[]).some(b => String(b) === target);
+  const notPickedUp = j => !(j.bins_pu||[]).some(b => String(b) === target);
+  // Prefer a job where this bin is delivered but not yet picked up (genuinely
+  // "out" right now); fall back to any active job that mentions this bin.
+  return jobs.find(j => isOut(j) && notPickedUp(j)) || jobs.find(isOut) || null;
+}
+function handleBinQRParam(){
+  const params = new URLSearchParams(window.location.search);
+  const bin = params.get('bin');
+  if(!bin) return;
+  // Strip it from the URL so a refresh/back navigation doesn't re-trigger the jump.
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('bin');
+  window.history.replaceState({}, '', cleanUrl.toString());
+  const job = findJobByBinNumber(bin);
+  if(job){
+    continueJob(job.id);
+    showToast('Bin ' + bin + ' — opened ' + (job.client||'job') + ' at ' + (job.site||'site'));
+  } else {
+    showTab('jobs');
+    showToast('Bin ' + bin + ' isn\'t on an active job right now.');
+  }
 }
 
 let _lastAuthEvent = 0;
