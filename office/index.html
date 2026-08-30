@@ -334,7 +334,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       </div>
       <div class="tbl-wrap">
         <table class="t" id="cl-tbl">
-          <thead><tr><th>Name</th><th>Contact</th><th>Short code</th><th>Icon</th><th>Type</th><th>Status</th><th>Created</th><th style="width:130px">Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Contact</th><th>Short code</th><th>Icon</th><th>Type</th><th>Waste reporting</th><th>Status</th><th>Created</th><th style="width:190px">Actions</th></tr></thead>
           <tbody id="cl-body"></tbody>
         </table>
       </div>
@@ -763,11 +763,24 @@ table.t tbody tr:hover{background:#f7f9fc}
         </select>
       </div>
       <label class="chk"><input type="checkbox" id="cm-general"> Mark as the General Skip Assignment folder</label>
+      <label class="chk"><input type="checkbox" id="cm-waste-reporting"> Certified builder — enable waste diversion reporting</label>
+      <div class="sm" style="color:var(--mt);margin:-6px 0 10px 24px">Adds a cumulative tonnage / % diverted / % recycled summary to this client's docket PDFs, and a "Report" button on the Clients screen.</div>
       <div class="err" id="cm-err"></div>
     </div>
     <div class="mdl-foot">
       <button class="btn-s" onclick="closeClientModal()">Cancel</button>
       <button class="btn-p" onclick="saveClient()" id="cm-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- WASTE DIVERSION REPORT MODAL -->
+<div class="mdl-bk" id="wr-bk">
+  <div class="mdl" style="max-width:540px">
+    <div class="mdl-head"><h3 id="wr-title">Waste diversion report</h3><button class="btn-x" onclick="closeWasteReportModal()"><i class="ti ti-x"></i></button></div>
+    <div class="mdl-body" id="wr-body-content" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="mdl-foot">
+      <button class="btn-s" onclick="closeWasteReportModal()">Close</button>
     </div>
   </div>
 </div>
@@ -878,6 +891,52 @@ function showToast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add(
 function fmtDate(d){ if(!d) return '—'; const dt = new Date(d); if(isNaN(dt)) { const [y,m,dy]=String(d).split('-'); if(!y) return '—'; const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return parseInt(dy,10)+' '+M[parseInt(m,10)-1]+' '+y; } return dt.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()]+' '+dt.getFullYear(); }
 function fmtDT(s){ if(!s) return '—'; const dt = new Date(s); if(isNaN(dt)) return s; return fmtDate(dt) + ' ' + dt.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}); }
 function clientNameOf(row){ if(row.oneoff_name) return row.oneoff_name; if(row.client_name) return row.client_name; const c = CLIENTS.find(c=>c.id===row.client_id); return c?c.name:'—'; }
+
+// Computes cumulative waste-diversion stats for one project (a client + a
+// specific site) from its dockets. A "project" is every docket sharing the
+// same client_id + site — e.g. a builder doing repeat bin swaps on one job
+// over several months. Used by both the in-app "Waste diversion report"
+// (Clients screen) and the Project Waste Diversion Summary section appended
+// to client-facing docket PDFs for clients with waste_reporting_enabled on.
+// Only dockets that have actually been weighed at disposal count towards the
+// totals — a docket still awaiting pickup/disposal contributes nothing yet.
+// Diversion/recycled % are computed only over CLASSIFIED tonnage (i.e. where
+// office has filled in a Disposal Outcome in the Compliance tab) rather than
+// silently assuming unclassified waste went to landfill — unclassifiedT
+// tells the caller how much weight is still pending classification so the
+// report can flag it instead of understating the diversion rate.
+function aggregateWasteStats(dockets){
+  let totalT = 0, classifiedT = 0, divertedT = 0, recycledT = 0, count = 0;
+  let firstDate = null, lastDate = null;
+  (dockets||[]).forEach(d => {
+    if(d.voided) return;
+    const w = parseFloat(d.weight);
+    if(!isFinite(w) || w <= 0) return;
+    count++;
+    totalT += w;
+    const out = d.disposal_outcome || '';
+    if(out){
+      classifiedT += w;
+      if(out !== 'Landfill') divertedT += w;
+      if(out === 'Recycled') recycledT += w;
+    }
+    const dt = d.dis_date || d.submitted_at || d.date;
+    if(dt){
+      const dv = new Date(dt);
+      if(!isNaN(dv)){
+        if(!firstDate || dv < firstDate) firstDate = dv;
+        if(!lastDate || dv > lastDate) lastDate = dv;
+      }
+    }
+  });
+  return {
+    count, totalT, classifiedT, divertedT, recycledT,
+    unclassifiedT: Math.max(0, totalT - classifiedT),
+    divertedPct: classifiedT > 0 ? (divertedT / classifiedT * 100) : null,
+    recycledPct: classifiedT > 0 ? (recycledT / classifiedT * 100) : null,
+    firstDate, lastDate
+  };
+}
 function initials(name){ if(!name) return '?'; return name.trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase(); }
 
 // ── SCREEN SWITCH ──────────────────────────────────────────────────────────
@@ -2212,7 +2271,7 @@ function renderClients(){
   const showArch = $('cl-showArchived').checked;
   const rows = CLIENTS.filter(c => showArch ? true : c.active);
   const body = $('cl-body');
-  if(!rows.length){ body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--mt)">No clients</td></tr>`; return; }
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--mt)">No clients</td></tr>`; return; }
   body.innerHTML = rows.map(c => `
     <tr>
       <td><i class="ti ${esc(c.icon||'ti-building')}" style="color:var(--or);margin-right:6px"></i>${esc(c.name)}</td>
@@ -2220,11 +2279,13 @@ function renderClients(){
       <td style="font-family:ui-monospace,Menlo,monospace;color:#555">${esc(c.short_code||'—')}</td>
       <td><code style="font-size:11px;color:var(--mt)">${esc(c.icon||'—')}</code></td>
       <td>${c.is_general?'<span class="pill orange">General</span>':'<span class="pill grey">Client</span>'}</td>
+      <td>${c.waste_reporting_enabled?'<span class="pill green">On</span>':'<span class="pill grey">Off</span>'}</td>
       <td>${c.active?'<span class="pill green">Active</span>':'<span class="pill red">Archived</span>'}</td>
       <td style="color:var(--mt)">${esc(fmtDate(c.created_at))}</td>
       <td>
         <button class="btn-s" onclick='openClientModal(${JSON.stringify(c.id)})'>Edit</button>
         <button class="btn-s" onclick="toggleClientActive('${esc(c.id)}', ${c.active?'false':'true'})">${c.active?'Archive':'Restore'}</button>
+        ${c.waste_reporting_enabled ? `<button class="btn-s" onclick='openWasteReportModal(${JSON.stringify(c.id)})'><i class="ti ti-recycle"></i> Report</button>` : ''}
       </td>
     </tr>
   `).join('');
@@ -2245,9 +2306,10 @@ function openClientModal(id){
     $('cm-code').value = c.short_code||'';
     $('cm-icon').value = c.icon||'ti-building';
     $('cm-general').checked = !!c.is_general;
+    $('cm-waste-reporting').checked = !!c.waste_reporting_enabled;
   } else {
     $('cm-title').textContent = 'Add client';
-    $('cm-name').value=''; $('cm-contact').value=''; $('cm-code').value=''; $('cm-icon').value='ti-building'; $('cm-general').checked=false;
+    $('cm-name').value=''; $('cm-contact').value=''; $('cm-code').value=''; $('cm-icon').value='ti-building'; $('cm-general').checked=false; $('cm-waste-reporting').checked=false;
   }
   $('cm-err').classList.remove('show');
   $('cm-bk').classList.add('on');
@@ -2278,6 +2340,7 @@ async function saveClient(){
   const code = $('cm-code').value.trim().toLowerCase();
   const icon = $('cm-icon').value;
   const isGen = $('cm-general').checked;
+  const wasteReporting = $('cm-waste-reporting').checked;
   const err = $('cm-err'); err.classList.remove('show');
   if(!name || !code){ err.textContent='Name and short code are required.'; err.classList.add('show'); return; }
   if(!/^[a-z0-9_-]+$/.test(code)){ err.textContent='Short code: lowercase letters, numbers, dash or underscore only.'; err.classList.add('show'); return; }
@@ -2285,9 +2348,9 @@ async function saveClient(){
   try {
     let r;
     if(_editingClientId){
-      r = await sb.from('clients').update({ name, contact: contact||null, short_code: code, icon, is_general: isGen }).eq('id', _editingClientId);
+      r = await sb.from('clients').update({ name, contact: contact||null, short_code: code, icon, is_general: isGen, waste_reporting_enabled: wasteReporting }).eq('id', _editingClientId);
     } else {
-      r = await sb.from('clients').insert([{ name, contact: contact||null, short_code: code, icon, is_general: isGen, active: true }]).select();
+      r = await sb.from('clients').insert([{ name, contact: contact||null, short_code: code, icon, is_general: isGen, active: true, waste_reporting_enabled: wasteReporting }]).select();
     }
     if(r.error) throw r.error;
     const convertingDocketId = _convertFromDocketId;
@@ -2321,6 +2384,59 @@ async function toggleClientActive(id, active){
     showToast(active?'Restored':'Archived');
   } catch(e){ showToast('Failed: '+e.message); }
 }
+
+// ── WASTE DIVERSION REPORT (per client, broken down by site/project) ───────
+// Only offered for clients with waste_reporting_enabled ticked (see Client
+// modal). Groups that client's dockets by site — each distinct site is
+// treated as one project — and shows cumulative tonnage / % diverted from
+// landfill / % recycled for each, using the same aggregateWasteStats() used
+// to build the summary appended to that client's PDFs.
+async function openWasteReportModal(clientId){
+  const c = CLIENTS.find(x=>x.id===clientId);
+  if(!c) return;
+  $('wr-title').textContent = 'Waste diversion report — ' + c.name;
+  $('wr-body-content').innerHTML = '<div class="cmp-empty">Loading…</div>';
+  $('wr-bk').classList.add('on');
+  try {
+    const { data, error } = await sb.from('dockets')
+      .select('id,site,weight,disposal_outcome,dis_date,submitted_at,date,voided')
+      .eq('client_id', clientId);
+    if(error) throw error;
+    const bySite = {};
+    (data||[]).forEach(d => {
+      if(d.voided) return;
+      const key = (d.site || '').trim() || '(no site recorded)';
+      (bySite[key] = bySite[key] || []).push(d);
+    });
+    const siteBlocks = Object.keys(bySite).sort().map(site => {
+      const stats = aggregateWasteStats(bySite[site]);
+      if(stats.count === 0) return '';
+      const period = (stats.firstDate && stats.lastDate) ? (fmtDate(stats.firstDate) + ' – ' + fmtDate(stats.lastDate)) : '—';
+      const divStr = stats.divertedPct != null ? stats.divertedPct.toFixed(0)+'%' : 'Pending classification';
+      const recStr = stats.recycledPct != null ? stats.recycledPct.toFixed(0)+'%' : 'Pending classification';
+      const noteHtml = stats.unclassifiedT > 0.005
+        ? `<div class="sm" style="color:#a15c00;margin-top:6px"><i class="ti ti-alert-triangle"></i> ${stats.unclassifiedT.toFixed(2)} t not yet classified in Compliance — fill in Disposal Outcome on those dockets to complete this project's reporting.</div>`
+        : '';
+      return `<div class="dr-sect">
+        <div class="dr-sect-t"><i class="ti ti-map-pin"></i>${esc(site)}</div>
+        <div class="dr-grid">
+          ${fieldRow('Total waste removed', stats.totalT.toFixed(2)+' t')}
+          ${fieldRow('Bin services', String(stats.count))}
+          ${fieldRow('Diverted from landfill', divStr)}
+          ${fieldRow('Recycled', recStr)}
+        </div>
+        ${fieldRow('Project period', period)}
+        ${noteHtml}
+      </div>`;
+    }).filter(Boolean);
+    $('wr-body-content').innerHTML = siteBlocks.length
+      ? siteBlocks.join('')
+      : '<div class="cmp-empty">No completed disposals recorded for this client yet — totals will appear here once a docket has been weighed at disposal.</div>';
+  } catch(e){
+    $('wr-body-content').innerHTML = '<div class="cmp-empty">Failed to load: ' + esc(e.message) + '</div>';
+  }
+}
+function closeWasteReportModal(){ $('wr-bk').classList.remove('on'); }
 
 // ── DRIVERS SCREEN ─────────────────────────────────────────────────────────
 function renderDrivers(){
@@ -2998,6 +3114,46 @@ async function generateDocketPDF(docketId, copyType){
       cursorY = doc.lastAutoTable.finalY + 4;
     }
 
+    // Appended to the CLIENT copy only, and only for clients with
+    // waste_reporting_enabled ticked (see Clients screen) — cumulative
+    // tonnage / % diverted / % recycled across every docket sharing this
+    // docket's client + site to date, so a builder's final PDF for a
+    // project shows their running totals, not just this one bin's figures.
+    async function drawWasteDiversionSummary(){
+      const { data: projectDockets, error: pErr } = await sb.from('dockets')
+        .select('id,weight,disposal_outcome,dis_date,submitted_at,date,voided')
+        .eq('client_id', docket.client_id)
+        .eq('site', docket.site);
+      if(pErr || !projectDockets) return;
+      const stats = aggregateWasteStats(projectDockets);
+      if(stats.count === 0) return; // nothing weighed on this project yet — nothing to report
+      drawSectionTitle('Project Waste Diversion Summary');
+      drawDescription(
+        'Cumulative totals for all waste removed by Snowy Skips from ' + (docket.site || 'this site') +
+        ' across ' + stats.count + ' bin service' + (stats.count===1?'':'s') + ' to date.'
+      );
+      drawTable(
+        ['Total Waste Removed','Diverted from Landfill','Recycled','Project Period'],
+        [
+          stats.totalT.toFixed(2) + ' t',
+          stats.divertedPct != null ? stats.divertedPct.toFixed(0) + '%' : 'Pending classification',
+          stats.recycledPct != null ? stats.recycledPct.toFixed(0) + '%' : 'Pending classification',
+          (stats.firstDate && stats.lastDate) ? (_dpDate(stats.firstDate) + ' – ' + _dpDate(stats.lastDate)) : '—'
+        ]
+      );
+      if(stats.unclassifiedT > 0.005){
+        ensureSpace(12);
+        doc.setFillColor(254,248,232);
+        doc.setDrawColor(232,170,40); doc.setLineWidth(0.3);
+        doc.roundedRect(M, cursorY, PW - 2*M, 9, 1, 1, 'FD');
+        doc.setTextColor.apply(doc, DARK);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8);
+        doc.text(stats.unclassifiedT.toFixed(2) + ' t of this project\'s waste is not yet classified for diversion reporting — figures above will update once classified.', M + 3, cursorY + 6);
+        cursorY += 12;
+        doc.setLineWidth(0.2);
+      }
+    }
+
     function drawPill(text, x, yPos){
       doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
       const txtW = doc.getTextWidth(text);
@@ -3265,6 +3421,10 @@ async function generateDocketPDF(docketId, copyType){
 
     if(sigs.delivery || sigs.pickup || sigs.disposal){
       drawLockedNotice();
+    }
+
+    if(copyType === 'client' && clientObj && clientObj.waste_reporting_enabled && docket.client_id && docket.site){
+      await drawWasteDiversionSummary();
     }
 
     // All photos for this docket, grouped by the stage they were taken at,
