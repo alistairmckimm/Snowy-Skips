@@ -565,6 +565,9 @@ table.t tbody tr:hover{background:#f7f9fc}
     <div class="fld">
       <label>Site / location *</label>
       <input type="text" id="nd-site" placeholder="e.g. 12 Bordeaux St, Berridale">
+      <select id="nd-site-select" style="display:none"></select>
+      <input type="text" id="nd-site-new" placeholder="Type the new site name" style="display:none;margin-top:6px">
+      <div class="sm" id="nd-site-hint" style="display:none;color:var(--mt);margin-top:4px">Certified builder — pick this project's site, or "+ Add new site" if it's not listed yet.</div>
     </div>
     <div class="fld">
       <label>Date</label>
@@ -806,8 +809,17 @@ table.t tbody tr:hover{background:#f7f9fc}
         </select>
       </div>
       <label class="chk"><input type="checkbox" id="cm-general"> Mark as the General Skip Assignment folder</label>
-      <label class="chk"><input type="checkbox" id="cm-waste-reporting"> Certified builder — enable waste diversion reporting</label>
+      <label class="chk"><input type="checkbox" id="cm-waste-reporting" onchange="toggleClientSitesBlock()"> Certified builder — enable waste diversion reporting</label>
       <div class="sm" style="color:var(--mt);margin:-6px 0 10px 24px">Adds a cumulative tonnage / % diverted / % recycled summary to this client's docket PDFs, and a "Report" button on the Clients screen.</div>
+      <div id="cm-sites-block" style="display:none;margin-bottom:10px">
+        <label>Project sites</label>
+        <div class="sm" style="color:var(--mt);margin:-2px 0 8px">Drivers and office pick a site from this list when creating an order for this client, instead of typing it — keeps every job on a project recorded under the exact same site name so the reporting above stays accurate.</div>
+        <div id="cm-sites-list" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="cm-site-new" placeholder="e.g. 23 Kosciuszko Rd, Jindabyne" style="flex:1">
+          <button type="button" class="btn-s" onclick="addClientSite()">Add</button>
+        </div>
+      </div>
       <div class="err" id="cm-err"></div>
     </div>
     <div class="mdl-foot">
@@ -2509,6 +2521,55 @@ function openClientModal(id){
   }
   $('cm-err').classList.remove('show');
   $('cm-bk').classList.add('on');
+  toggleClientSitesBlock();
+}
+
+// ── PROJECT SITES (certified builders) ──────────────────────────────────────
+// A certified builder can be running 10+ concurrent jobs — free-typing the
+// site every time a docket's created means the same project ends up under
+// several different spellings, which silently splits the cumulative waste
+// diversion / volume reporting above (grouped by client_id + site) into
+// phantom separate projects. This curated per-client list is what the New
+// Docket panel (and the driver app) pick site names from instead.
+let _cmSites = [];
+function toggleClientSitesBlock(){
+  const on = $('cm-waste-reporting').checked;
+  const block = $('cm-sites-block');
+  if(!block) return;
+  if(!on || !_editingClientId){ block.style.display = 'none'; return; }
+  block.style.display = '';
+  loadAndRenderClientSites(_editingClientId);
+}
+async function loadAndRenderClientSites(clientId){
+  const list = $('cm-sites-list');
+  list.innerHTML = '<div class="sm" style="color:var(--mt)">Loading…</div>';
+  const { data, error } = await sb.from('client_sites').select('*').eq('client_id', clientId).order('site');
+  _cmSites = error ? [] : (data||[]);
+  renderClientSitesList();
+}
+function renderClientSitesList(){
+  const list = $('cm-sites-list');
+  if(!list) return;
+  if(!_cmSites.length){ list.innerHTML = '<div class="sm" style="color:var(--mt)">No sites added yet — the first one can also just be typed on the New Docket panel.</div>'; return; }
+  list.innerHTML = _cmSites.map(s => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 4px 5px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px">
+      <span style="font-size:12px">${esc(s.site)}</span>
+      <button type="button" class="btn-x" title="Remove this site" onclick="deleteClientSite('${esc(s.id)}')"><i class="ti ti-x" style="font-size:14px"></i></button>
+    </div>`).join('');
+}
+async function addClientSite(){
+  const inp = $('cm-site-new');
+  const site = inp.value.trim();
+  if(!site || !_editingClientId) return;
+  inp.value = '';
+  const { error } = await sb.from('client_sites').insert([{ client_id: _editingClientId, site, created_by: currentUser ? currentUser.id : null }]);
+  if(error && !/duplicate|already exists|unique/i.test(error.message||'')){ showToast('Could not add site: ' + error.message); return; }
+  await loadAndRenderClientSites(_editingClientId);
+}
+async function deleteClientSite(siteId){
+  const { error } = await sb.from('client_sites').delete().eq('id', siteId);
+  if(error){ showToast('Could not remove site: ' + error.message); return; }
+  await loadAndRenderClientSites(_editingClientId);
 }
 
 // Pre-fills the Add Client modal from a one-off General Skip Assignment
@@ -2924,6 +2985,7 @@ function openNewDocket(){
   $('nd-oneoff-contact').value = '';
   $('nd-oneoff-block').style.display = 'none';
   $('nd-site').value = '';
+  updateNdSiteField(null);
   // Default date = today
   const dt = new Date();
   const ymd = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
@@ -2950,6 +3012,7 @@ function openNewDocket(){
     const c = CLIENTS.find(x => x.id === sel.value);
     const isGen = c && (c.is_general || /general/i.test(c.name||''));
     $('nd-oneoff-block').style.display = isGen ? '' : 'none';
+    updateNdSiteField(c);
   };
   setTimeout(() => sel.focus(), 80);
 }
@@ -2959,11 +3022,63 @@ function closeNewDocket(){
   $('nd-drawer').classList.remove('on');
 }
 
+// ── SITE PICKER (certified builders only) ───────────────────────────────────
+// Same mechanism as the driver app — see its updateSiteField() for the full
+// rationale. For a certified-builder client, the free-text Site field is
+// replaced with a picker sourced from `client_sites` (managed from the
+// client's edit modal, or grown here via "+ Add new site").
+let _ndSiteCache = {};
+async function fetchClientSitesCached(clientId, force){
+  if(!clientId) return [];
+  if(!force && _ndSiteCache[clientId]) return _ndSiteCache[clientId];
+  const { data, error } = await sb.from('client_sites').select('*').eq('client_id', clientId).order('site');
+  const sites = error ? [] : (data||[]);
+  _ndSiteCache[clientId] = sites;
+  return sites;
+}
+async function updateNdSiteField(client, currentSite){
+  const input = $('nd-site'), sel = $('nd-site-select'), newInp = $('nd-site-new'), hint = $('nd-site-hint');
+  if(!client || !client.waste_reporting_enabled){
+    input.style.display = ''; sel.style.display = 'none'; newInp.style.display = 'none'; hint.style.display = 'none';
+    return;
+  }
+  input.style.display = 'none'; hint.style.display = '';
+  sel.innerHTML = '<option value="">Loading sites…</option>'; sel.style.display = '';
+  newInp.style.display = 'none'; newInp.value = '';
+  const sites = await fetchClientSitesCached(client.id);
+  let options = sites.map(s => s.site);
+  const cur = (currentSite || '').trim();
+  const matchExisting = cur && options.find(o => o.toLowerCase() === cur.toLowerCase());
+  if(cur && !matchExisting) options = [cur].concat(options);
+  sel.innerHTML = (options.length ? options.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('') : '')
+    + '<option value="__add_new__">+ Add new site…</option>';
+  sel.value = matchExisting ? matchExisting : (cur ? cur : (options.length ? options[0] : '__add_new__'));
+  sel.onchange = () => { newInp.style.display = sel.value === '__add_new__' ? '' : 'none'; };
+  sel.onchange();
+}
+function getNdSiteValue(){
+  const sel = $('nd-site-select');
+  if(sel && sel.style.display !== 'none'){
+    return sel.value === '__add_new__' ? $('nd-site-new').value.trim() : sel.value;
+  }
+  return $('nd-site').value.trim();
+}
+async function registerNdNewSiteIfNeeded(client){
+  const sel = $('nd-site-select');
+  if(!client || !client.waste_reporting_enabled || !sel || sel.style.display === 'none' || sel.value !== '__add_new__') return;
+  const site = $('nd-site-new').value.trim();
+  if(!site) return;
+  try {
+    await sb.from('client_sites').insert([{ client_id: client.id, site, created_by: currentUser ? currentUser.id : null }]);
+  } catch(e){ console.error('registerNdNewSiteIfNeeded', e); }
+  delete _ndSiteCache[client.id];
+}
+
 async function saveNewDocket(){
   const err = $('nd-err'); err.classList.remove('show'); err.textContent = '';
   const clientId = $('nd-client').value;
   const client = CLIENTS.find(c => c.id === clientId);
-  const site = $('nd-site').value.trim();
+  const site = getNdSiteValue();
   const date = $('nd-date').value || null;
   const binType = $('nd-bintype').value;
   const wasteType = [...ndSelWasteTypes].join(', ');
@@ -2971,7 +3086,7 @@ async function saveNewDocket(){
   const oneoffName = $('nd-oneoff-name').value.trim();
   const oneoffContact = $('nd-oneoff-contact').value.trim();
   if(!client){ err.textContent = 'Please pick a client / folder.'; err.classList.add('show'); return; }
-  if(!site){ err.textContent = 'Site / location is required.'; err.classList.add('show'); return; }
+  if(!site){ err.textContent = (client.waste_reporting_enabled ? 'Please choose a project site, or type one under "+ Add new site".' : 'Site / location is required.'); err.classList.add('show'); return; }
   const isGen = client.is_general || /general/i.test(client.name||'');
   if(isGen && !oneoffName){ err.textContent = 'One-off client name is required for General Skip Assignment.'; err.classList.add('show'); return; }
 
@@ -3014,6 +3129,7 @@ async function saveNewDocket(){
       ({ error: insErr } = await sb.from('dockets').insert([row]));
     }
     if(insErr) throw insErr;
+    registerNdNewSiteIfNeeded(client);
     for(const file of quotePhotoFiles){
       try {
         const path = id + '/quote_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '.jpg';
