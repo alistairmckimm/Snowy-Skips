@@ -401,7 +401,12 @@ canvas{display:none}
             <div class="field"><label>Client name</label><input type="text" id="f-oneoff-name" placeholder="e.g. Sarah Johnson"></div>
             <div class="field" style="margin-bottom:0"><label>Contact (phone or email)</label><input type="text" id="f-oneoff-contact" placeholder="e.g. 0412 345 678"></div>
           </div>
-          <div class="field"><label>Site / location</label><input type="text" id="f-location" placeholder="e.g. The Village, Thredbo"></div>
+          <div class="field"><label>Site / location</label>
+            <input type="text" id="f-location" placeholder="e.g. The Village, Thredbo">
+            <select id="f-location-select" style="display:none"></select>
+            <input type="text" id="f-location-new" placeholder="Type the new site name" style="display:none;margin-top:6px">
+            <div id="f-location-hint" style="display:none;color:#888;font-size:11px;margin-top:4px">Certified builder — pick this project's site, or "+ Add new site" if it's not listed yet.</div>
+          </div>
           <div class="field"><label>Date</label><input type="date" id="f-date"></div>
         </div>
         <div class="sc">
@@ -797,7 +802,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-31.1';
+const APP_BUILD = 'build 2026-08-31.2';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -932,6 +937,7 @@ function startNewJobForClient() {
   if(folder) {
     document.getElementById('f-client').value = folder.name;
     document.getElementById('form-title').textContent = folder.name;
+    onClientChange('');
   }
 }
 
@@ -970,7 +976,7 @@ function continueJob(jobId) {
   document.getElementById('f-client').value = j.client;
   const oo1 = document.getElementById('f-oneoff-name'); if(oo1) oo1.value = j.oneoffName || '';
   const oo2 = document.getElementById('f-oneoff-contact'); if(oo2) oo2.value = j.oneoffContact || '';
-  onClientChange();
+  onClientChange(j.site);
   document.getElementById('f-location').value = j.site;
   document.getElementById('f-date').value = j.date;
   document.getElementById('f-bintype').value = j.binType;
@@ -1052,7 +1058,7 @@ function editSubmittedJob(jobId) {
   document.getElementById('f-client').value = j.client;
   const oo1 = document.getElementById('f-oneoff-name'); if(oo1) oo1.value = j.oneoffName || '';
   const oo2 = document.getElementById('f-oneoff-contact'); if(oo2) oo2.value = j.oneoffContact || '';
-  onClientChange();
+  onClientChange(j.site);
   document.getElementById('f-location').value = j.site;
   document.getElementById('f-date').value = j.date;
   document.getElementById('f-bintype').value = j.binType;
@@ -1150,7 +1156,7 @@ function toggleWasteType(t) {
 renderWasteTypePicker();
 
 // ── FORM LOGIC ─────────────────────────────────────────────────────────────
-function onClientChange() {
+function onClientChange(presetSite) {
   const sel = document.getElementById('f-client');
   const v = sel.value;
   if(v === '__add_new__') {
@@ -1162,6 +1168,74 @@ function onClientChange() {
   const oneoff = document.getElementById('oneoff-block');
   const f = FOLDERS.find(x => x.name === v);
   if(oneoff) oneoff.style.display = (f && f.general) ? '' : 'none';
+  const siteSoFar = presetSite !== undefined ? presetSite : (document.getElementById('f-location').value || '');
+  updateSiteField(f, siteSoFar);
+}
+
+// ── SITE PICKER (certified builders only) ───────────────────────────────────
+// Certified-builder clients (client.waste_reporting_enabled) can rack up 10+
+// concurrent projects — free-typing the site every time means the same
+// project ends up recorded under several different spellings, which silently
+// splits the cumulative waste diversion / volume reporting (grouped by
+// client_id + site) into phantom separate projects. For these clients only,
+// the free-text field is replaced with a picker sourced from `client_sites`
+// (the canonical per-client site list) — driver can still add a genuinely
+// new site via "+ Add new site", which is saved back to that list so every
+// driver after them picks the same spelling.
+let _driverSiteCache = {};
+async function fetchSitesForClient(clientId, force) {
+  if(!clientId) return [];
+  if(!force && _driverSiteCache[clientId]) return _driverSiteCache[clientId];
+  try {
+    const { data, error } = await sb.from('client_sites').select('*').eq('client_id', clientId).order('site');
+    const sites = error ? [] : (data || []);
+    _driverSiteCache[clientId] = sites;
+    return sites;
+  } catch(e) { return []; }
+}
+async function updateSiteField(folder, currentSite) {
+  const input = document.getElementById('f-location');
+  const sel = document.getElementById('f-location-select');
+  const newInp = document.getElementById('f-location-new');
+  const hint = document.getElementById('f-location-hint');
+  if(!folder || !folder._wasteReporting) {
+    input.style.display = ''; sel.style.display = 'none'; newInp.style.display = 'none'; hint.style.display = 'none';
+    return;
+  }
+  input.style.display = 'none'; hint.style.display = '';
+  sel.innerHTML = '<option value="">Loading sites…</option>'; sel.style.display = '';
+  newInp.style.display = 'none'; newInp.value = '';
+  const sites = await fetchSitesForClient(folder._clientId);
+  let options = sites.map(s => s.site);
+  const cur = (currentSite || '').trim();
+  const matchExisting = cur && options.find(o => o.toLowerCase() === cur.toLowerCase());
+  if(cur && !matchExisting) options = [cur].concat(options); // legacy/free-typed site not yet in the list — show it so nothing looks lost
+  sel.innerHTML = (options.length ? options.map(s => '<option value="'+esc(s)+'">'+esc(s)+'</option>').join('') : '')
+    + '<option value="__add_new__">+ Add new site…</option>';
+  sel.value = matchExisting ? matchExisting : (cur ? cur : (options.length ? options[0] : '__add_new__'));
+  sel.onchange = () => { newInp.style.display = sel.value === '__add_new__' ? '' : 'none'; };
+  sel.onchange();
+}
+// Reads the effective site value regardless of whether the picker or the
+// free-text field is currently the active input for this client.
+function getSiteValue() {
+  const sel = document.getElementById('f-location-select');
+  if(sel && sel.style.display !== 'none') {
+    return sel.value === '__add_new__' ? document.getElementById('f-location-new').value.trim() : sel.value;
+  }
+  return document.getElementById('f-location').value.trim();
+}
+// Called right after a docket is saved with a site the driver typed in
+// "+ Add new site" — best-effort, never blocks the save it follows.
+async function registerNewSiteIfNeeded(folder) {
+  const sel = document.getElementById('f-location-select');
+  if(!folder || !folder._wasteReporting || !sel || sel.style.display === 'none' || sel.value !== '__add_new__') return;
+  const site = document.getElementById('f-location-new').value.trim();
+  if(!site) return;
+  try {
+    await sb.from('client_sites').insert([{ client_id: folder._clientId, site, created_by: (currentDriver && currentDriver.id) || null }]);
+  } catch(e) { console.error('registerNewSiteIfNeeded', e); }
+  delete _driverSiteCache[folder._clientId]; // let the next open re-fetch and pick up the new site
 }
 
 function goStep(n) {
@@ -1300,7 +1374,7 @@ function _imgSize(src){
 async function generateQuotePDF() {
   if(!window.jspdf || !window.jspdf.jsPDF) { showToast('PDF library not loaded — check your connection.'); return; }
   const clientVal = document.getElementById('f-client').value;
-  const siteVal = document.getElementById('f-location').value;
+  const siteVal = getSiteValue();
   if(!clientVal) { showInlineAlert(1, 'Pick a client / folder first.'); return; }
   if(!siteVal) { showInlineAlert(1, 'Enter a site / location.'); return; }
   if(clientVal === 'General Skip Assignment') {
@@ -1337,6 +1411,7 @@ async function generateQuotePDF() {
 
     const ok = await saveDocketToDB(job, 'order', 'quote:generated');
     if(!ok) return;
+    registerNewSiteIfNeeded(FOLDERS.find(f => f.name === data.client));
     const quotePhotosFailed = await uploadDocketPhotos(job.id);
 
     // ── Build the PDF ──
@@ -1625,6 +1700,7 @@ async function fileJobToFolder(jobId) {
 
 function resetForm() {
   ['f-client','f-location','f-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  updateSiteField(null, '');
   ['fw','fcbm'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   ['f-bintype','f-facility'].forEach(id=>{const e=document.getElementById(id);if(e)e.selectedIndex=0;});
   selWasteTypes = new Set(['Construction']);
@@ -1831,7 +1907,7 @@ async function loadClientsFromDB() {
   try {
     const { data, error } = await sb.from('clients').select('*').eq('active', true).order('name');
     if(error) throw error;
-    FOLDERS = (data||[]).map(c => ({ id: c.short_code, name: c.name, icon: c.icon||'ti-building', general: !!c.is_general, _clientId: c.id }));
+    FOLDERS = (data||[]).map(c => ({ id: c.short_code, name: c.name, icon: c.icon||'ti-building', general: !!c.is_general, _clientId: c.id, _wasteReporting: !!c.waste_reporting_enabled }));
     renderFolders();
   } catch(e) { console.error('loadClientsFromDB', e); showToast('Could not load clients: '+e.message); }
 }
@@ -2368,7 +2444,7 @@ function gatherFormData() {
     client: document.getElementById('f-client').value || '',
     oneoffName: (document.getElementById('f-oneoff-name') && document.getElementById('f-oneoff-name').value) || '',
     oneoffContact: (document.getElementById('f-oneoff-contact') && document.getElementById('f-oneoff-contact').value) || '',
-    site: document.getElementById('f-location').value || '',
+    site: getSiteValue() || '',
     date: document.getElementById('f-date').value || '',
     binType: document.getElementById('f-bintype').value || '',
     wasteType: [...selWasteTypes].join(', '),
@@ -2461,7 +2537,7 @@ async function saveAndExit(stageKey) {
     // Order needs a client + location before it can be saved
     if(stageKey === 'order') {
       const clientVal = document.getElementById('f-client').value;
-      const siteVal = document.getElementById('f-location').value;
+      const siteVal = getSiteValue();
       if(!clientVal) { showInlineAlert(1, 'Pick a client / folder first.'); return; }
       if(!siteVal) { showInlineAlert(1, 'Enter a site / location.'); return; }
       if(clientVal === 'General Skip Assignment') {
@@ -2517,6 +2593,7 @@ async function saveAndExit(stageKey) {
       if(!editingJobId) { const idx = jobs.findIndex(j => j.id === job.id); if(idx>-1) jobs.splice(idx, 1); }
       return;
     }
+    if(stageKey === 'order') registerNewSiteIfNeeded(FOLDERS.find(f => f.name === data.client));
     // Upload any buffered photos
     const photosFailed = await uploadDocketPhotos(job.id);
 
