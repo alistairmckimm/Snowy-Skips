@@ -948,21 +948,41 @@ function clientNameOf(row){ if(row.oneoff_name) return row.oneoff_name; if(row.c
 // silently assuming unclassified waste went to landfill — unclassifiedT
 // tells the caller how much weight is still pending classification so the
 // report can flag it instead of understating the diversion rate.
+// totalCbm sums volume (m³) the same way as tonnage — a straightforward
+// physical quantity with no diversion/recycled split, so every docket with a
+// volume entered at disposal contributes, independent of classification.
+// compositionPct gives a weighted-average waste-type breakdown across the
+// whole project (each docket's pickup composition %, weighted by that
+// docket's tonnage) — used by the Project Report PDF for ISO 14001 records.
 function aggregateWasteStats(dockets){
   let totalT = 0, classifiedT = 0, divertedT = 0, recycledT = 0, count = 0;
+  let totalCbm = 0;
   let firstDate = null, lastDate = null;
+  const compSums = {}, compWeighted = { basis: 0 };
   (dockets||[]).forEach(d => {
     if(d.voided) return;
     const w = parseFloat(d.weight);
-    if(!isFinite(w) || w <= 0) return;
-    count++;
-    totalT += w;
-    const out = d.disposal_outcome || '';
-    if(out){
-      classifiedT += w;
-      if(out !== 'Landfill') divertedT += w;
-      if(out === 'Recycled') recycledT += w;
+    const hasWeight = isFinite(w) && w > 0;
+    if(hasWeight){
+      count++;
+      totalT += w;
+      const out = d.disposal_outcome || '';
+      if(out){
+        classifiedT += w;
+        if(out !== 'Landfill') divertedT += w;
+        if(out === 'Recycled') recycledT += w;
+      }
+      const pcts = d.waste_pcts || {};
+      if(pcts && Object.keys(pcts).length){
+        compWeighted.basis += w;
+        Object.entries(pcts).forEach(([k,v]) => {
+          const pv = parseFloat(v);
+          if(isFinite(pv) && pv > 0) compSums[k] = (compSums[k]||0) + pv * w;
+        });
+      }
     }
+    const cbm = parseFloat(d.cbm);
+    if(isFinite(cbm) && cbm > 0) totalCbm += cbm;
     const dt = d.dis_date || d.submitted_at || d.date;
     if(dt){
       const dv = new Date(dt);
@@ -972,8 +992,10 @@ function aggregateWasteStats(dockets){
       }
     }
   });
+  const compositionPct = {};
+  Object.entries(compSums).forEach(([k,sum]) => { compositionPct[k] = compWeighted.basis > 0 ? (sum / compWeighted.basis) : 0; });
   return {
-    count, totalT, classifiedT, divertedT, recycledT,
+    count, totalT, classifiedT, divertedT, recycledT, totalCbm, compositionPct,
     unclassifiedT: Math.max(0, totalT - classifiedT),
     divertedPct: classifiedT > 0 ? (divertedT / classifiedT * 100) : null,
     recycledPct: classifiedT > 0 ? (recycledT / classifiedT * 100) : null,
@@ -2573,7 +2595,7 @@ async function openWasteReportModal(clientId){
   $('wr-bk').classList.add('on');
   try {
     const { data, error } = await sb.from('dockets')
-      .select('id,site,weight,disposal_outcome,dis_date,submitted_at,date,voided')
+      .select('id,site,weight,cbm,waste_pcts,disposal_outcome,facility,dis_date,submitted_at,date,voided')
       .eq('client_id', clientId);
     if(error) throw error;
     const bySite = {};
@@ -2591,16 +2613,23 @@ async function openWasteReportModal(clientId){
       const noteHtml = stats.unclassifiedT > 0.005
         ? `<div class="sm" style="color:#a15c00;margin-top:6px"><i class="ti ti-alert-triangle"></i> ${stats.unclassifiedT.toFixed(2)} t not yet classified in Compliance — fill in Disposal Outcome on those dockets to complete this project's reporting.</div>`
         : '';
+      // No real project report for the "no site recorded" bucket — it isn't
+      // one project, just a catch-all for dockets missing a site.
+      const reportBtnHtml = site !== '(no site recorded)'
+        ? `<button class="btn-o sm" style="margin-top:8px" data-client-id="${esc(clientId)}" data-site="${esc(site)}" onclick="generateProjectReportPDF(this)"><i class="ti ti-file-certificate"></i> Download project report (PDF)</button>`
+        : '';
       return `<div class="dr-sect">
         <div class="dr-sect-t"><i class="ti ti-map-pin"></i>${esc(site)}</div>
         <div class="dr-grid">
           ${fieldRow('Total waste removed', stats.totalT.toFixed(2)+' t')}
+          ${fieldRow('Total volume', stats.totalCbm.toFixed(2)+' m³')}
           ${fieldRow('Bin services', String(stats.count))}
           ${fieldRow('Diverted from landfill', divStr)}
           ${fieldRow('Recycled', recStr)}
         </div>
         ${fieldRow('Project period', period)}
         ${noteHtml}
+        ${reportBtnHtml}
       </div>`;
     }).filter(Boolean);
     $('wr-body-content').innerHTML = siteBlocks.length
@@ -2611,6 +2640,179 @@ async function openWasteReportModal(clientId){
   }
 }
 function closeWasteReportModal(){ $('wr-bk').classList.remove('on'); }
+
+// Generates a standalone "Project Environmental Report" PDF for one client +
+// site — the cumulative figures a certified builder needs both to price
+// future builds and as supporting documentation for ISO 14001 environmental
+// reporting. Deliberately its own generator (not a mode of generateDocketPDF
+// or generateQuotePDF) since it isn't about one docket at all — it's a
+// project-level rollup. Figures + a facility/date table only, no photos,
+// per Al's confirmed scope.
+async function generateProjectReportPDF(btnEl){
+  if(!window.jspdf || !window.jspdf.jsPDF){ showToast('PDF library not loaded'); return; }
+  const clientId = btnEl.dataset.clientId;
+  const site = btnEl.dataset.site;
+  if(!clientId || !site) return;
+  showToast('Generating project report…');
+  try {
+    const c = CLIENTS.find(x=>x.id===clientId);
+    const clientName = c ? c.name : 'Client';
+
+    const { data: dockets, error } = await sb.from('dockets')
+      .select('id,weight,cbm,waste_pcts,disposal_outcome,facility,dis_date,submitted_at,date,arr_date,bins_delivered,bins_picked_up,voided')
+      .eq('client_id', clientId)
+      .eq('site', site);
+    if(error) throw error;
+    const rows = (dockets||[]).filter(d => !d.voided);
+    const stats = aggregateWasteStats(rows);
+    if(stats.count === 0){ showToast('No completed disposals recorded for this project yet.'); return; }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const M = 15, PW = 210, PH = 297;
+    const GREEN = _hex('#4C7A4F'), DARK = _hex('#1A1A1A'), GREY = _hex('#666666'), LIGHTC = _hex('#E8EBE6');
+    let cursorY = M;
+    function ensureSpace(h){ if(cursorY + h > PH - 20){ doc.addPage(); cursorY = M; } }
+
+    const logoUrl = await _getLogoDataUrl();
+    if(logoUrl){ try { doc.addImage(logoUrl, 'PNG', M, cursorY, 18, 18); } catch(e){} }
+    doc.setTextColor.apply(doc, DARK);
+    doc.setFont('helvetica','bold'); doc.setFontSize(18);
+    doc.text('PROJECT ENVIRONMENTAL REPORT', M + 24, cursorY + 8);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.setTextColor.apply(doc, GREY);
+    doc.text('McKimm Civil Pty Ltd · trading as Snowy Skips', M + 24, cursorY + 14);
+    doc.setDrawColor.apply(doc, GREEN); doc.setLineWidth(0.6);
+    doc.line(M, cursorY + 22, PW - M, cursorY + 22);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.setTextColor.apply(doc, DARK);
+    doc.text('Report date', PW - M, cursorY + 4, { align:'right' });
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.setTextColor.apply(doc, GREY);
+    doc.text(_dpDate(new Date()), PW - M, cursorY + 9, { align:'right' });
+    cursorY += 30;
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor.apply(doc, DARK);
+    doc.text('Prepared for', M, cursorY);
+    cursorY += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text(clientName, M, cursorY); cursorY += 5;
+    doc.setFontSize(9); doc.setTextColor.apply(doc, GREY);
+    doc.text(site, M, cursorY); cursorY += 10;
+
+    // Summary figures
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, DARK);
+    doc.text('Project Summary', M, cursorY); cursorY += 6;
+    const period = (stats.firstDate && stats.lastDate) ? (_dpDate(stats.firstDate) + ' – ' + _dpDate(stats.lastDate)) : '—';
+    doc.autoTable({
+      startY: cursorY,
+      margin: { left: M, right: M },
+      body: [
+        ['Total waste removed', stats.totalT.toFixed(2) + ' t'],
+        ['Total volume', stats.totalCbm.toFixed(2) + ' m³'],
+        ['Bin services', String(stats.count)],
+        ['Diverted from landfill', stats.divertedPct != null ? stats.divertedPct.toFixed(0) + '%' : 'Pending classification'],
+        ['Recycled', stats.recycledPct != null ? stats.recycledPct.toFixed(0) + '%' : 'Pending classification'],
+        ['Project period', period]
+      ],
+      theme: 'plain',
+      styles: { font:'helvetica', fontSize:9.5, textColor: DARK, cellPadding: 3 },
+      columnStyles: { 0: { fontStyle:'bold', cellWidth: 55 }, 1: { textColor: GREY } }
+    });
+    cursorY = doc.lastAutoTable.finalY + 4;
+
+    if(stats.unclassifiedT > 0.005){
+      ensureSpace(12);
+      doc.setFillColor(254,248,232);
+      doc.setDrawColor(232,170,40); doc.setLineWidth(0.3);
+      doc.roundedRect(M, cursorY, PW - 2*M, 9, 1, 1, 'FD');
+      doc.setTextColor.apply(doc, DARK);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      doc.text(stats.unclassifiedT.toFixed(2) + ' t of this project\'s waste is not yet classified for diversion reporting — figures above will update once classified.', M + 3, cursorY + 6);
+      cursorY += 15;
+      doc.setLineWidth(0.2);
+    } else {
+      cursorY += 6;
+    }
+
+    // Waste composition breakdown, weighted by docket weight, largest first
+    const compEntries = Object.entries(stats.compositionPct).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]);
+    if(compEntries.length){
+      ensureSpace(16);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, DARK);
+      doc.text('Waste Composition', M, cursorY); cursorY += 6;
+      doc.autoTable({
+        startY: cursorY,
+        margin: { left: M, right: M },
+        head: [['Waste Type','Share of Classified Weight']],
+        body: compEntries.map(([k,v]) => [k.charAt(0).toUpperCase()+k.slice(1), v.toFixed(0)+'%']),
+        theme: 'plain',
+        styles: { font:'helvetica', fontSize:9, textColor: DARK, cellPadding: 2.5 },
+        headStyles: { fillColor: GREEN, textColor: [255,255,255], fontStyle:'bold' },
+        columnStyles: { 1: { halign:'right' } }
+      });
+      cursorY = doc.lastAutoTable.finalY + 8;
+    }
+
+    // Docket-by-docket record — facility/date table
+    ensureSpace(16);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, DARK);
+    doc.text('Bin Service Record', M, cursorY); cursorY += 6;
+    const sortedRows = rows.slice().sort((a,b) => {
+      const da = new Date(a.dis_date || a.submitted_at || a.date || a.arr_date || 0);
+      const db = new Date(b.dis_date || b.submitted_at || b.date || b.arr_date || 0);
+      return da - db;
+    });
+    doc.autoTable({
+      startY: cursorY,
+      margin: { left: M, right: M },
+      head: [['Docket','Date','Bins','Facility','Outcome','Weight (t)','Volume (m³)']],
+      body: sortedRows.map(d => {
+        const bins = (d.bins_picked_up && d.bins_picked_up.length ? d.bins_picked_up : (d.bins_delivered||[])).map(b=>'#'+b).join(', ') || '—';
+        return [
+          d.id,
+          _dpDate(d.dis_date || d.submitted_at || d.date || d.arr_date) || '—',
+          bins,
+          d.facility || '—',
+          d.disposal_outcome || 'Pending',
+          d.weight != null ? Number(d.weight).toFixed(2) : '—',
+          d.cbm != null ? Number(d.cbm).toFixed(2) : '—'
+        ];
+      }),
+      theme: 'striped',
+      styles: { font:'helvetica', fontSize:8, textColor: DARK, cellPadding: 2.5 },
+      headStyles: { fillColor: GREEN, textColor: [255,255,255], fontStyle:'bold' },
+      alternateRowStyles: { fillColor: LIGHTC },
+      columnStyles: { 5: { halign:'right' }, 6: { halign:'right' } }
+    });
+    cursorY = doc.lastAutoTable.finalY + 10;
+
+    ensureSpace(24);
+    doc.setDrawColor.apply(doc, LIGHTC); doc.setLineWidth(0.3);
+    doc.line(M, cursorY, PW - M, cursorY); cursorY += 5;
+    doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
+    const disc = 'This report summarises waste removal, diversion and volume data recorded by Snowy Skips for this project to date. It is provided to support future build pricing and environmental reporting, including ISO 14001 documentation. Figures marked "Pending classification" will update once the corresponding dockets are classified in Compliance.';
+    const discLines = doc.splitTextToSize(disc, PW - 2*M);
+    doc.text(discLines, M, cursorY);
+
+    const totalPages = doc.internal.getNumberOfPages();
+    for(let p=1;p<=totalPages;p++){
+      doc.setPage(p);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor.apply(doc, GREY);
+      doc.text('Snowy Skips — Project Environmental Report', M, PH - 10);
+      doc.text('Page ' + p + ' of ' + totalPages, PW - M, PH - 10, { align:'right' });
+    }
+
+    const clientSlug = _slugify(clientName);
+    const siteSlug = _slugify(site);
+    const ymd = new Date().toISOString().slice(0,10);
+    doc.save('Snowy-Skips-Project-Report-' + clientSlug + '-' + siteSlug + '-' + ymd + '.pdf');
+    showToast('Done — project report downloaded.');
+  } catch(e){
+    console.error('generateProjectReportPDF', e);
+    showToast('Could not generate project report: ' + e.message);
+  }
+}
 
 // ── DRIVERS SCREEN ─────────────────────────────────────────────────────────
 function renderDrivers(){
@@ -3305,7 +3507,7 @@ async function generateDocketPDF(docketId, copyType){
     // project shows their running totals, not just this one bin's figures.
     async function drawWasteDiversionSummary(){
       const { data: projectDockets, error: pErr } = await sb.from('dockets')
-        .select('id,weight,disposal_outcome,dis_date,submitted_at,date,voided')
+        .select('id,weight,cbm,waste_pcts,disposal_outcome,dis_date,submitted_at,date,voided')
         .eq('client_id', docket.client_id)
         .eq('site', docket.site);
       if(pErr || !projectDockets) return;
@@ -3317,9 +3519,10 @@ async function generateDocketPDF(docketId, copyType){
         ' across ' + stats.count + ' bin service' + (stats.count===1?'':'s') + ' to date.'
       );
       drawTable(
-        ['Total Waste Removed','Diverted from Landfill','Recycled','Project Period'],
+        ['Total Waste Removed','Total Volume','Diverted from Landfill','Recycled','Project Period'],
         [
           stats.totalT.toFixed(2) + ' t',
+          stats.totalCbm.toFixed(2) + ' m³',
           stats.divertedPct != null ? stats.divertedPct.toFixed(0) + '%' : 'Pending classification',
           stats.recycledPct != null ? stats.recycledPct.toFixed(0) + '%' : 'Pending classification',
           (stats.firstDate && stats.lastDate) ? (_dpDate(stats.firstDate) + ' – ' + _dpDate(stats.lastDate)) : '—'
