@@ -1433,6 +1433,33 @@ function edRow(label, id, value, opts){
   return `<div class="dr-field"><label>${esc(label)}</label><input type="${type}" id="${id}" value="${value==null?'':esc(value)}"${opts.step?` step="${esc(opts.step)}"`:''}></div>`;
 }
 
+// Site field in "Edit docket details": for certified-builder clients this is
+// the same locked dropdown ("pick from list, or + Add new site") used on New
+// Docket, so office corrections can't reintroduce a spelling variant that
+// splits the project's reporting. Non-waste-reporting clients keep the plain
+// free-text box. Relies on _ndSiteCache being pre-populated by
+// toggleDetailsEdit() before this renders.
+function drSiteFieldHtml(d, client){
+  if(!client || !client.waste_reporting_enabled){
+    return edRow('Site', 'dr-e-site', d.site);
+  }
+  const sites = (_ndSiteCache[client.id] || []).map(s => s.site);
+  const cur = (d.site || '').trim();
+  const matchExisting = cur && sites.find(o => o.toLowerCase() === cur.toLowerCase());
+  let options = sites.slice();
+  if(cur && !matchExisting) options = [cur].concat(options);
+  const selectedVal = matchExisting ? matchExisting : (cur || '__add_new__');
+  const isAddNew = selectedVal === '__add_new__';
+  return `<div class="dr-field">
+    <label>Site</label>
+    <select id="dr-e-site-select" onchange="document.getElementById('dr-e-site-new').style.display = this.value==='__add_new__' ? '' : 'none'">
+      ${options.map(s => `<option value="${esc(s)}" ${s===selectedVal?'selected':''}>${esc(s)}</option>`).join('')}
+      <option value="__add_new__" ${isAddNew?'selected':''}>+ Add new site…</option>
+    </select>
+    <input type="text" id="dr-e-site-new" placeholder="Type the new site name" style="margin-top:6px;${isAddNew?'':'display:none'}" value="${isAddNew ? esc(cur) : ''}">
+  </div>`;
+}
+
 function renderDrawerDetails(d){
   const pcts = d.waste_pcts || {};
   const pctList = Object.entries(pcts).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}%`).join(', ');
@@ -1450,7 +1477,7 @@ function renderDrawerDetails(d){
         ${fieldRow('Docket ID', d.id)}
         ${fieldRow('Stage', (STAGE_COLS.find(c=>c.n===(d.stage||1))||{}).label)}
         ${fieldRow('Client', clientNameOf(d))}
-        ${ed ? edRow('Site', 'dr-e-site', d.site) : fieldRow('Site', d.site)}
+        ${ed ? drSiteFieldHtml(d, CLIENTS.find(c=>c.id===d.client_id)) : fieldRow('Site', d.site)}
         ${ed ? dtRow('Order date', 'dr-e-date', d.date, 'date') : fieldRow('Order date', fmtDate(d.date))}
         ${ed ? edRow('Bin type', 'dr-e-bintype', d.bin_type, {type:'select', options:BIN_TYPE_OPTIONS}) : fieldRow('Bin type', d.bin_type)}
         ${ed ? edRow('Waste type', 'dr-e-wastetype', d.waste_type) : fieldRow('Waste type', d.waste_type)}
@@ -1509,9 +1536,15 @@ function renderDrawerDetails(d){
   `;
 }
 
-function toggleDetailsEdit(){
+async function toggleDetailsEdit(){
   drDetailsEditing = true;
-  if(activeDocket) renderDrawerDetails(activeDocket);
+  if(activeDocket){
+    const client = CLIENTS.find(c => c.id === activeDocket.client_id);
+    if(client && client.waste_reporting_enabled){
+      try { await fetchClientSitesCached(client.id); } catch(e){ console.error('toggleDetailsEdit sites', e); }
+    }
+    if(drDetailsEditing && activeDocket) renderDrawerDetails(activeDocket);
+  }
 }
 
 function cancelDetailsEdit(){
@@ -1533,6 +1566,10 @@ async function saveDetailsEdit(docketId){
   // so office can correct any operational field a driver got wrong — site,
   // bin type, waste type, comments, rego, bin numbers, facility, weight,
   // volume — not just timestamps.
+  const siteSel = el('dr-e-site-select');
+  const siteVal = siteSel
+    ? (siteSel.value === '__add_new__' ? (el('dr-e-site-new') ? el('dr-e-site-new').value.trim() : '') || null : (siteSel.value || null))
+    : txt('dr-e-site');
   const patch = {
     date:     val('dr-e-date'),
     arr_date: val('dr-e-arr-date'),
@@ -1541,7 +1578,7 @@ async function saveDetailsEdit(docketId){
     pu_time:  val('dr-e-pu-time'),
     dis_date: val('dr-e-dis-date'),
     dis_time: val('dr-e-dis-time'),
-    site: txt('dr-e-site'),
+    site: siteVal,
     bin_type: txt('dr-e-bintype'),
     waste_type: txt('dr-e-wastetype'),
     comments: txt('dr-e-comments'),
@@ -1578,6 +1615,7 @@ async function saveDetailsEdit(docketId){
       ({ error } = await sb.from('dockets').update(patch).eq('id', docketId));
     }
     if(error) throw error;
+    await registerDrNewSiteIfNeeded(CLIENTS.find(c => c.id === (activeDocket ? activeDocket.client_id : null)));
     await logAudit(docketId, 'edited:office-details', patch);
     drDetailsEditing = false;
     showToast('Docket details updated.');
@@ -3071,6 +3109,21 @@ async function registerNdNewSiteIfNeeded(client){
   try {
     await sb.from('client_sites').insert([{ client_id: client.id, site, created_by: currentUser ? currentUser.id : null }]);
   } catch(e){ console.error('registerNdNewSiteIfNeeded', e); }
+  delete _ndSiteCache[client.id];
+}
+
+// Same "+ Add new site" registration as registerNdNewSiteIfNeeded above, but
+// for the "Edit docket details" drawer's site select (dr-e-site-select /
+// dr-e-site-new) instead of the New Docket panel's.
+async function registerDrNewSiteIfNeeded(client){
+  const sel = $('dr-e-site-select');
+  if(!client || !client.waste_reporting_enabled || !sel || sel.value !== '__add_new__') return;
+  const newInp = $('dr-e-site-new');
+  const site = newInp ? newInp.value.trim() : '';
+  if(!site) return;
+  try {
+    await sb.from('client_sites').insert([{ client_id: client.id, site, created_by: currentUser ? currentUser.id : null }]);
+  } catch(e){ console.error('registerDrNewSiteIfNeeded', e); }
   delete _ndSiteCache[client.id];
 }
 
