@@ -151,6 +151,10 @@ textarea{resize:none;height:60px}
 .pthumb{border-radius:9px;aspect-ratio:1;overflow:hidden;position:relative;background:#f0f0f0}
 .pthumb img{width:100%;height:100%;object-fit:cover}
 .pthumb .rm{position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0}
+.pex-label{font-size:9px;font-weight:700;color:#8a8a8a;text-transform:uppercase;letter-spacing:0.4px;margin-top:10px;display:flex;align-items:center;gap:4px}
+.pex-label i{color:var(--tl);font-size:12px}
+.pthumb.existing{border:1px solid #e5e5e5}
+.pthumb.existing a{display:block;width:100%;height:100%}
 .photo-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
 .pslot{border:2px dashed #d0d0d0;border-radius:10px;overflow:hidden;cursor:pointer;background:#f7f7f7;min-height:105px;display:flex;flex-direction:column}
 .pslot.has-photo{border-style:solid;border-color:var(--tl)}
@@ -465,6 +469,7 @@ canvas{display:none}
           <input type="file" id="ph-arr-cam" accept="image/*" capture="environment" multiple onchange="addPhotos('arr',this)">
           <input type="file" id="ph-arr-gal" accept="image/*" multiple onchange="addPhotos('arr',this)">
           <div class="pgrid" id="pg-arr"></div>
+          <div id="pg-arr-existing"></div>
         </div>
         <div class="sc">
           <div class="stitle"><i class="ti ti-writing"></i>Sign delivery</div>
@@ -515,6 +520,7 @@ canvas{display:none}
           <input type="file" id="ph-pu-cam" accept="image/*" capture="environment" multiple onchange="addPhotos('pu',this)">
           <input type="file" id="ph-pu-gal" accept="image/*" multiple onchange="addPhotos('pu',this)">
           <div class="pgrid" id="pg-pu"></div>
+          <div id="pg-pu-existing"></div>
         </div>
         <div class="sc">
           <div class="stitle"><i class="ti ti-writing"></i>Sign pickup</div>
@@ -584,6 +590,7 @@ canvas{display:none}
             <input type="file" id="ph-rec-cam" accept="image/*" capture="environment" onchange="hsp('rec',this)">
             <input type="file" id="ph-rec-gal" accept="image/*" onchange="hsp('rec',this)">
           </div>
+          <div id="pg-dis-existing"></div>
         </div>
         <div class="sc">
           <div class="stitle"><i class="ti ti-writing"></i>Sign disposal</div>
@@ -790,7 +797,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-30.2';
+const APP_BUILD = 'build 2026-08-31.1';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -1006,6 +1013,7 @@ function continueJob(jobId) {
   else renderSigBox('sig-pu', null, false);
   if(currentSigs.disposal) { renderSigBox('sig-dis', currentSigs.disposal, true); lockStep(4, currentSigs.disposal.by, currentSigs.disposal.at); }
   else renderSigBox('sig-dis', null, false);
+  loadExistingPhotosForJob(jobId);
   // Navigate to next step
   const nextStep = Math.min(j.stage + 1, 4);
   document.getElementById('form-title').textContent = j.client + ' — ' + j.id;
@@ -1086,6 +1094,7 @@ function editSubmittedJob(jobId) {
   renderSigBox('sig-pu',  currentSigs.pickup   || null, !!currentSigs.pickup);
   renderSigBox('sig-dis', currentSigs.disposal || null, !!currentSigs.disposal);
   currentPhotos = {arr:[],pu:[],tip:[],rec:[]};
+  loadExistingPhotosForJob(jobId);
   setEditModeButtons(true);
   document.getElementById('form-title').textContent = j.client + ' — ' + j.id;
   document.getElementById('form-sub').textContent = 'Editing completed docket';
@@ -1115,8 +1124,8 @@ async function saveSubmittedEdit() {
     // and job.sigs was never modified above.
     const ok = await saveDocketToDB(job, 'disposal', 'edited:post-submission');
     if(!ok) return;
-    await uploadDocketPhotos(job.id);
-    showToast('Docket updated.');
+    const photosFailed = await uploadDocketPhotos(job.id);
+    showToast('Docket updated.' + (photosFailed ? ' Some photos failed to upload — check signal and try again.' : ''));
     editingSubmittedId = null;
     setEditModeButtons(false);
     resetForm();
@@ -1328,7 +1337,7 @@ async function generateQuotePDF() {
 
     const ok = await saveDocketToDB(job, 'order', 'quote:generated');
     if(!ok) return;
-    await uploadDocketPhotos(job.id);
+    const quotePhotosFailed = await uploadDocketPhotos(job.id);
 
     // ── Build the PDF ──
     const { jsPDF } = window.jspdf;
@@ -1444,7 +1453,7 @@ async function generateQuotePDF() {
     const ymd = new Date().toISOString().slice(0,10);
     doc.save('Snowy-Skips-Quote-' + job.id + '-' + clientSlug + '-' + ymd + '.pdf');
 
-    showToast('Quotation saved & downloaded.');
+    showToast('Quotation saved & downloaded.' + (quotePhotosFailed ? ' Some photos failed to upload — check signal and try again.' : ''));
   } catch(e) {
     console.error('generateQuotePDF', e);
     showToast('Could not generate quotation: ' + e.message);
@@ -1501,7 +1510,44 @@ function clearSig(id) {
 // ── PHOTOS ─────────────────────────────────────────────────────────────────
 function fmtStamp(){const n=new Date();const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];let h=n.getHours(),m=n.getMinutes();const a=h>=12?'PM':'AM';h=h%12||12;return n.getDate()+' '+M[n.getMonth()]+' '+n.getFullYear()+'  '+h+':'+(m<10?'0'+m:m)+' '+a+' UTC+10:00';}
 
-function stImg(src,cb){const i=new Image();i.onload=function(){const c=document.getElementById('sc');const W=i.naturalWidth||800,H=i.naturalHeight||600;c.width=W;c.height=H;const x=c.getContext('2d');x.drawImage(i,0,0,W,H);const bH=Math.round(H*0.12),p=Math.round(W*0.02);x.fillStyle='rgba(0,0,0,0.62)';x.fillRect(0,H-bH,W,bH);const f1=Math.max(11,Math.round(bH*0.32)),f2=Math.max(10,Math.round(bH*0.27));x.fillStyle='#f5c842';x.font='bold '+f1+'px monospace';x.fillText(fmtStamp(),p,H-bH+Math.round(bH*0.38));x.font=f2+'px monospace';x.fillText('McKimm Civil Pty Ltd',p,H-bH+Math.round(bH*0.66));x.fillStyle='rgba(255,255,255,0.8)';x.font=f2+'px monospace';x.fillText('Snowy Skips',p,H-bH+Math.round(bH*0.92));cb(c.toDataURL('image/jpeg',0.88));};i.onerror=()=>cb(src);i.src=src;}
+function stImg(src,cb){
+  const i=new Image();
+  i.onload=function(){
+    try {
+      // Cap the longest side before drawing to canvas. A phone camera's native
+      // capture (often 4000px+, sometimes 8000px+ on newer phones) can exceed
+      // mobile Safari/Chrome's canvas size limit, which silently produces a
+      // blank/garbage image instead of throwing — this was causing "Take
+      // photo" shots to vanish while a "Choose from gallery" pick (usually
+      // already downsized by the OS) worked fine. Capping here also makes
+      // uploads much faster on mobile data.
+      const MAX_DIM = 1600;
+      const nw = i.naturalWidth||800, nh = i.naturalHeight||600;
+      const scale = Math.min(1, MAX_DIM / Math.max(nw, nh));
+      const W = Math.max(1, Math.round(nw*scale)), H = Math.max(1, Math.round(nh*scale));
+      const c=document.getElementById('sc');
+      c.width=W;c.height=H;
+      const x=c.getContext('2d');
+      x.drawImage(i,0,0,W,H);
+      const bH=Math.round(H*0.12),p=Math.round(W*0.02);
+      x.fillStyle='rgba(0,0,0,0.62)';x.fillRect(0,H-bH,W,bH);
+      const f1=Math.max(11,Math.round(bH*0.32)),f2=Math.max(10,Math.round(bH*0.27));
+      x.fillStyle='#f5c842';x.font='bold '+f1+'px monospace';x.fillText(fmtStamp(),p,H-bH+Math.round(bH*0.38));
+      x.font=f2+'px monospace';x.fillText('McKimm Civil Pty Ltd',p,H-bH+Math.round(bH*0.66));
+      x.fillStyle='rgba(255,255,255,0.8)';x.font=f2+'px monospace';x.fillText('Snowy Skips',p,H-bH+Math.round(bH*0.92));
+      const out = c.toDataURL('image/jpeg',0.88);
+      // A canvas failure (size limit, memory pressure) can still return a
+      // tiny/garbage data URL without throwing — fall back to the original
+      // photo rather than silently losing it.
+      cb(out && out.length > 1000 ? out : src);
+    } catch(e) {
+      console.error('stImg stamp failed, using original photo', e);
+      cb(src);
+    }
+  };
+  i.onerror=()=>cb(src);
+  i.src=src;
+}
 
 function addPhotos(zone,input){Array.from(input.files).forEach(f=>{const r=new FileReader();r.onload=e=>{stImg(e.target.result,s=>{currentPhotos[zone].push({src:s});rPg(zone);});};r.readAsDataURL(f);});input.value='';}
 function rPg(zone){const g=document.getElementById('pg-'+zone);if(!g)return;g.innerHTML=currentPhotos[zone].map((p,i)=>'<div class="pthumb"><img src="'+p.src+'"><button class="rm" onclick="rmP(\''+zone+'\','+i+')"><i class="ti ti-x"></i></button></div>').join('');}
@@ -1588,7 +1634,7 @@ function resetForm() {
   document.getElementById('va').classList.add('hidden');
   photos={arr:[],pu:[]};
   currentPhotos={arr:[],pu:[],tip:[],rec:[],quote:[]};
-  ['pg-arr','pg-pu','pg-quote'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
+  ['pg-arr','pg-pu','pg-quote','pg-arr-existing','pg-pu-existing','pg-dis-existing'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
   quoteItems = [];
   renderQuoteItems();
   const qNotes = document.getElementById('f-quote-notes'); if(qNotes) qNotes.value = '';
@@ -2113,12 +2159,48 @@ async function generateDocketIdFromDB() {
   } catch(e) { console.error('generateDocketId', e); return 'MCK-' + String(Date.now()).slice(-6); }
 }
 
+// Fetches photos already saved for a docket (from a previous session/step)
+// and shows them as a small read-only "Already saved" strip under each
+// zone's picker. The driver app previously never re-fetched these when
+// reopening a job — every save worked fine, but coming back to check on a
+// docket always looked like "no photos", because nothing already uploaded
+// was ever shown again. These are display-only and are never re-uploaded.
+async function loadExistingPhotosForJob(jobId) {
+  const containers = ['pg-arr-existing','pg-pu-existing','pg-dis-existing'];
+  containers.forEach(id => { const el = document.getElementById(id); if(el) el.innerHTML = ''; });
+  if(!jobId) return;
+  try {
+    const { data, error } = await sb.from('photos').select('zone,storage_path,uploaded_at').eq('docket_id', jobId).order('uploaded_at', { ascending:true });
+    if(error) throw error;
+    if(!data || !data.length) return;
+    const byZone = {};
+    data.forEach(p => {
+      const { data: pub } = sb.storage.from('docket-photos').getPublicUrl(p.storage_path);
+      (byZone[p.zone] = byZone[p.zone] || []).push(pub.publicUrl);
+    });
+    const thumbs = urls => urls.map(u => `<div class="pthumb existing"><a href="${u}" target="_blank" rel="noopener"><img src="${u}" loading="lazy"></a></div>`).join('');
+    const fill = (containerId, urls) => {
+      const el = document.getElementById(containerId);
+      if(!el || !urls || !urls.length) return;
+      el.innerHTML = `<div class="pex-label"><i class="ti ti-photo-check"></i>Already saved (${urls.length})</div><div class="pgrid">${thumbs(urls)}</div>`;
+    };
+    fill('pg-arr-existing', byZone.arr);
+    fill('pg-pu-existing', byZone.pu);
+    fill('pg-dis-existing', [...(byZone.tip||[]), ...(byZone.rec||[])]);
+  } catch(e) { console.error('loadExistingPhotosForJob', e); }
+}
+
 async function uploadDocketPhotos(docketId) {
   // currentPhotos = { arr:[{src}], pu:[{src}], tip:[{src}], rec:[{src}] }
+  // Returns true if any photo failed to upload, so callers can fold that into
+  // their own toast instead of it being silently overwritten (showToast()
+  // just replaces whatever's currently showing — a warning shown here used to
+  // get instantly clobbered by the "Saved" toast the caller fires right after).
   const zones = ['arr','pu','tip','rec','quote'];
   let anyFailed = false;
   for(const zone of zones) {
     const list = currentPhotos[zone] || [];
+    const remaining = [];
     for(let i=0;i<list.length;i++) {
       const item = list[i];
       try {
@@ -2127,11 +2209,13 @@ async function uploadDocketPhotos(docketId) {
         const { error: upErr } = await sb.storage.from('docket-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
         if(upErr) throw upErr;
         await sb.from('photos').insert([{ docket_id: docketId, zone, storage_path: path, uploaded_by: (currentDriver && currentDriver.id) || null }]);
-      } catch(e) { console.error('photo upload', zone, e); anyFailed = true; }
+      } catch(e) { console.error('photo upload', zone, e); anyFailed = true; remaining.push(item); }
     }
+    // Only keep photos that actually failed queued up — successful ones are
+    // done, and re-sending them on a retry would just create duplicates.
+    currentPhotos[zone] = remaining;
   }
-  if(anyFailed) showToast('Some photos failed to upload — check signal.');
-  else { currentPhotos = { arr:[], pu:[], tip:[], rec:[], quote:[] }; }
+  return anyFailed;
 }
 
 async function saveDocketToDB(job, stageKey, auditAction) {
@@ -2434,7 +2518,7 @@ async function saveAndExit(stageKey) {
       return;
     }
     // Upload any buffered photos
-    await uploadDocketPhotos(job.id);
+    const photosFailed = await uploadDocketPhotos(job.id);
 
     const stageDone = stageKey === 'disposal' && hasSig;
     if(stageDone) {
@@ -2444,8 +2528,9 @@ async function saveAndExit(stageKey) {
       renderDoneList();
     }
 
-    if(hasSig) showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.');
-    else showToast('Saved — get a signature later to mark this step done.');
+    const photoWarning = photosFailed ? ' Some photos failed to upload — check signal and try again.' : '';
+    if(hasSig) showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.' + photoWarning);
+    else showToast('Saved — get a signature later to mark this step done.' + photoWarning);
 
     editingJobId = null;
     const folderToReopen = job.folder;
@@ -2469,7 +2554,10 @@ function showToast(msg) {
   const t = document.getElementById('toast'); if(!t) return;
   t.textContent = msg; t.classList.add('show');
   if(_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(()=>t.classList.remove('show'), 2400);
+  // Longer messages (e.g. a save confirmation plus a photo-upload warning)
+  // get a bit more time on screen so the warning half is actually readable.
+  const duration = msg && msg.length > 60 ? 4200 : 2400;
+  _toastTimer = setTimeout(()=>t.classList.remove('show'), duration);
 }
 
 </script>
