@@ -261,6 +261,7 @@ table.t tbody tr:hover{background:#f7f9fc}
   .scr{display:none !important}
   .scr.active{display:block !important;position:static !important}
   #binqr-print{display:grid !important}
+  #reviews-qr{display:grid !important}
 }
 
 /* small screens */
@@ -300,6 +301,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       <div class="sb-sec">Operations</div>
       <div class="sb-item" id="nav-binmap" onclick="showScreen('binmap')"><i class="ti ti-map-pin"></i><span>Bin map</span></div>
       <div class="sb-item" id="nav-binqr" onclick="showScreen('binqr')"><i class="ti ti-qrcode"></i><span>Bin QR codes</span></div>
+      <div class="sb-item" id="nav-reviews" onclick="showScreen('reviews')"><i class="ti ti-star"></i><span>Google reviews</span></div>
       <div class="sb-sec">Compliance</div>
       <div class="sb-item" id="nav-ncrs" onclick="showScreen('ncrs')"><i class="ti ti-alert-triangle"></i><span>Nonconformances</span><span class="sb-badge" id="bdg-ncrs">0</span></div>
       <div class="sb-item" id="nav-venm" onclick="showScreen('venm')"><i class="ti ti-certificate"></i><span>VENM certificates</span></div>
@@ -381,6 +383,23 @@ table.t tbody tr:hover{background:#f7f9fc}
       </div>
       <div class="sm" style="color:var(--mt);margin-bottom:10px">Each code opens the driver app straight into whatever job that bin is currently on. Print these onto weatherproof labels and stick one on each bin.</div>
       <div id="binqr-print" class="qr-grid"></div>
+    </section>
+
+    <!-- GOOGLE REVIEWS SCREEN -->
+    <section class="scr" id="scr-reviews">
+      <div class="kb-toolbar">
+        <span class="sm" style="color:var(--mt)">One link, straight to leaving Snowy Skips a review on Google.</span>
+        <span style="flex:1"></span>
+        <button class="btn-o" onclick="copyReviewLink()"><i class="ti ti-copy"></i> Copy link</button>
+        <button class="btn-o" onclick="window.print()"><i class="ti ti-printer"></i> Print</button>
+      </div>
+      <div class="sm" style="color:var(--mt);margin:0 18px 14px;max-width:640px">Use this on completed jobs — see the "Request Google review" button on any docket in Completion/Invoice, which opens a message to the customer with this link already in it. Or print the QR code below onto invoices, dockets, or a sign on the truck/office counter for customers to scan themselves.</div>
+      <div id="reviews-qr" class="qr-grid" style="margin:0 18px 18px;max-width:220px">
+        <div class="qr-card">
+          <div class="qr-canvas" id="qr-review"></div>
+          <div class="qr-label">Scan to leave a Google review</div>
+        </div>
+      </div>
     </section>
 
     <!-- DRIVERS SCREEN -->
@@ -1128,6 +1147,68 @@ async function generateBinQRCodes(){
   });
 }
 
+// ── GOOGLE REVIEWS ────────────────────────────────────────────────────────
+// Snowy Skips' own direct "write a review" link (Google Business Profile →
+// "Get more reviews"), confirmed against the live listing 2026-08-31. Kept
+// as one constant so it only needs updating in one place if it ever changes.
+const GOOGLE_REVIEW_LINK = 'https://g.page/r/CVmI479DHoovEBM/review';
+
+function renderReviewQR(){
+  const el = $('qr-review');
+  if(!el) return;
+  el.innerHTML = '';
+  try { new QRCode(el, { text: GOOGLE_REVIEW_LINK, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M }); }
+  catch(e){ console.error('QR render failed for review link', e); }
+}
+
+async function copyReviewLink(){
+  try { await navigator.clipboard.writeText(GOOGLE_REVIEW_LINK); showToast('Review link copied.'); }
+  catch(e){ showToast('Could not copy — link is ' + GOOGLE_REVIEW_LINK); }
+}
+
+// Builds the request message once so the wording is identical whether it
+// goes out by email, text, or gets copied for office to paste in manually.
+function buildReviewMessage(customerName){
+  const greet = customerName ? ('Hi ' + customerName + ',') : 'Hi,';
+  return {
+    subject: 'Thanks from Snowy Skips — quick favour?',
+    body: greet + '\n\nThanks for choosing Snowy Skips for your skip bin! If you have a minute, a quick Google review would really help us out and lets other locals know what to expect:\n\n' + GOOGLE_REVIEW_LINK + '\n\nThanks again,\nSnowy Skips'
+  };
+}
+
+// One-tap "ask for a review" on a completed job — the natural moment to ask
+// is right when a job is being invoiced, since that's when the customer
+// knows the job is genuinely done. Al: "we'd like to gather more Google
+// reviews... historically we haven't been asking for any at all" (2026-08-31).
+// Uses whatever contact the office already has on file for that client/
+// one-off customer — a plain "phone or email" free-text field (see
+// cm-contact) — to decide whether to open an email or a text message.
+async function requestGoogleReview(docketId){
+  const d = DOCKETS.find(x => x.id === docketId);
+  if(!d) return;
+  const client = d.client_id ? CLIENTS.find(c => c.id === d.client_id) : null;
+  const name = d.oneoff_name || (client ? client.name : '');
+  const contact = (d.oneoff_contact || (client ? client.contact : '') || '').trim();
+  const msg = buildReviewMessage(name);
+  if(contact && contact.includes('@')){
+    window.open('mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent(msg.subject) + '&body=' + encodeURIComponent(msg.body), '_blank');
+    showToast('Review request opened in your email app.');
+  } else if(contact){
+    // Treat anything else on file as a phone number. sms: URI support for a
+    // pre-filled body varies a bit by device/OS, but every major mobile
+    // platform at least opens the compose screen with the right contact.
+    window.open('sms:' + encodeURIComponent(contact) + '?body=' + encodeURIComponent(msg.body), '_blank');
+    showToast('Review request opened in your messages app.');
+  } else {
+    try {
+      await navigator.clipboard.writeText(msg.body);
+      showToast('No contact on file for this job — message copied, paste it to the customer however you\'d normally reach them.');
+    } catch(e){
+      showToast('No contact on file. Review link: ' + GOOGLE_REVIEW_LINK);
+    }
+  }
+}
+
 // ── SCREEN SWITCH ──────────────────────────────────────────────────────────
 function showScreen(s){
   activeScreen = s;
@@ -1135,7 +1216,7 @@ function showScreen(s){
   $('scr-'+s).classList.add('active');
   document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
   const navEl = $('nav-'+s); if(navEl) navEl.classList.add('active');
-  const titles = { dockets:'Dockets', clients:'Clients', drivers:'Drivers', audit:'Audit log', settings:'Settings', ncrs:'Nonconformances', venm:'VENM certificates', iso:'ISO 14001 audits', binmap:'Bin map', binqr:'Bin QR codes' };
+  const titles = { dockets:'Dockets', clients:'Clients', drivers:'Drivers', audit:'Audit log', settings:'Settings', ncrs:'Nonconformances', venm:'VENM certificates', iso:'ISO 14001 audits', binmap:'Bin map', binqr:'Bin QR codes', reviews:'Google reviews' };
   $('tb-title').textContent = titles[s] || s;
   if(s==='dockets') renderBoard();
   if(s==='clients') renderClients();
@@ -1145,6 +1226,7 @@ function showScreen(s){
   if(s==='venm') loadVENM();
   if(s==='iso') loadISO();
   if(s==='binmap') renderBinMap();
+  if(s==='reviews') renderReviewQR();
 }
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
@@ -1312,6 +1394,9 @@ function docketCard(d){
   const isCompleted = (d.stage||1) >= 5;
   const pdfBtn = isCompleted ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();generateDocketPDF('${esc(d.id)}','client')" title="Download client PDF"><i class="ti ti-file-download"></i></button>` : '';
   const quoteBtn = d.is_quote ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();generateQuotePDF('${esc(d.id)}')" title="Download quotation PDF"><i class="ti ti-report-money"></i></button>` : '';
+  // Same one-tap idea as pdfBtn, right next to it — the Invoice column is
+  // the natural moment to ask a happy customer for a Google review.
+  const reviewBtn = isCompleted ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();requestGoogleReview('${esc(d.id)}')" title="Request Google review"><i class="ti ti-star"></i></button>` : '';
   return `<div class="dcard ${d.has_nc?'has-nc':''}" onclick="openDrawer('${esc(d.id)}')">
     <div class="dc-top">
       <span class="dc-id">${esc(d.id)}</span>
@@ -1319,6 +1404,7 @@ function docketCard(d){
         ${d.is_quote?'<span class="pill blue">Quote</span>':''}
         ${quoteBtn}
         ${pdfBtn}
+        ${reviewBtn}
         <span class="dc-pill">${esc(d.bin_type||'—')}</span>
       </div>
     </div>
@@ -1661,6 +1747,7 @@ function renderDrawerActions(d){
       <button class="btn-p" ${canNext?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveNext('${esc(d.id)}')"><i class="ti ti-arrow-right"></i> Move to next stage</button>
       <button class="btn-p teal" ${canInvoice?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveToInvoice('${esc(d.id)}')"><i class="ti ti-receipt-2"></i> Move to Invoice</button>
     </div>
+    ${stage >= 5 ? `<div class="row"><button class="btn-o" style="border-color:#f0b429;color:#8a6100" onclick="requestGoogleReview('${esc(d.id)}')"><i class="ti ti-star"></i> Request Google review</button></div>` : ''}
     <div class="row">
       <button class="btn-s" onclick="reopenStage('${esc(d.id)}','delivery')">Reopen delivery</button>
       <button class="btn-s" onclick="reopenStage('${esc(d.id)}','pickup')">Reopen pickup</button>
