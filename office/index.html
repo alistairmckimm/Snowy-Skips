@@ -611,6 +611,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       <label>Comments (optional)</label>
       <textarea id="nd-comments" placeholder="Anything the driver should know…"></textarea>
     </div>
+    <label class="quote-toggle"><input type="checkbox" id="nd-request-review"><span>Ask for a Google review once this job is done — only tick for customers you know are happy</span></label>
     <label class="quote-toggle"><input type="checkbox" id="nd-is-quote" onchange="toggleNdQuoteTray()"><span>This is a quotation — no bin booked yet</span></label>
     <div id="nd-quote-tray" style="display:none">
       <div class="fld" style="margin-bottom:6px"><label>Quote items</label></div>
@@ -829,6 +830,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       </div>
       <label class="chk"><input type="checkbox" id="cm-general"> Mark as the General Skip Assignment folder</label>
       <label class="chk"><input type="checkbox" id="cm-waste-reporting" onchange="toggleClientSitesBlock()"> Certified builder — enable waste diversion reporting</label>
+      <label class="chk"><input type="checkbox" id="cm-request-reviews"> Ask this client for Google reviews (default for their new jobs — doesn't affect existing dockets)</label>
       <div class="sm" style="color:var(--mt);margin:-6px 0 10px 24px">Adds a cumulative tonnage / % diverted / % recycled summary to this client's docket PDFs, and a "Report" button on the Clients screen.</div>
       <div id="cm-sites-block" style="display:none;margin-bottom:10px">
         <label>Project sites</label>
@@ -1068,6 +1070,15 @@ function warnMapColumnsMissingOnce(){
   if(_mapColumnsMissingLogged) return;
   _mapColumnsMissingLogged = true;
   console.warn('Bin map: site_lat/site_lng columns not found — run migration_007_bin_location.sql in Supabase to enable the Bin map.');
+}
+function isMissingReviewColumnsError(msg){
+  return /request_review/i.test(msg||'');
+}
+let _reviewColumnsMissingLogged = false;
+function warnReviewColumnsMissingOnce(){
+  if(_reviewColumnsMissingLogged) return;
+  _reviewColumnsMissingLogged = true;
+  console.warn('Google reviews: request_review/request_reviews columns not found — run migration_009_review_optin.sql in Supabase to enable the review opt-in tick boxes.');
 }
 
 let _binMap = null, _binMapMarkers = [];
@@ -1394,9 +1405,11 @@ function docketCard(d){
   const isCompleted = (d.stage||1) >= 5;
   const pdfBtn = isCompleted ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();generateDocketPDF('${esc(d.id)}','client')" title="Download client PDF"><i class="ti ti-file-download"></i></button>` : '';
   const quoteBtn = d.is_quote ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();generateQuotePDF('${esc(d.id)}')" title="Download quotation PDF"><i class="ti ti-report-money"></i></button>` : '';
-  // Same one-tap idea as pdfBtn, right next to it — the Invoice column is
-  // the natural moment to ask a happy customer for a Google review.
-  const reviewBtn = isCompleted ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();requestGoogleReview('${esc(d.id)}')" title="Request Google review"><i class="ti ti-star"></i></button>` : '';
+  // Same one-tap idea as pdfBtn, right next to it — but only for jobs where
+  // office has explicitly ticked "ask this customer for a review" (client
+  // default or per-docket override, see the Edit docket details drawer /
+  // New Docket panel / client profile). We don't ask every customer.
+  const reviewBtn = (isCompleted && d.request_review) ? `<button class="dc-pdf-btn" onclick="event.stopPropagation();requestGoogleReview('${esc(d.id)}')" title="Request Google review"><i class="ti ti-star"></i></button>` : '';
   return `<div class="dcard ${d.has_nc?'has-nc':''}" onclick="openDrawer('${esc(d.id)}')">
     <div class="dc-top">
       <span class="dc-id">${esc(d.id)}</span>
@@ -1571,6 +1584,9 @@ function renderDrawerDetails(d){
       </div>
       ${d.oneoff_name?`<div class="dr-grid">${ed ? edRow('One-off client', 'dr-e-oneoff-name', d.oneoff_name) : fieldRow('One-off client', d.oneoff_name)}${ed ? edRow('Contact', 'dr-e-oneoff-contact', d.oneoff_contact) : fieldRow('Contact', d.oneoff_contact)}</div>`:''}
       ${ed ? edRow('Comments', 'dr-e-comments', d.comments, {type:'textarea'}) : (d.comments?fieldRow('Comments', d.comments):'')}
+      ${ed
+        ? `<div class="dr-field" style="grid-column:1/-1"><label>Google review</label><label class="chk" style="margin:2px 0 0"><input type="checkbox" id="dr-e-request-review" ${d.request_review?'checked':''}> Ask this customer for a Google review once completed — only tick for customers you know are happy</label></div>`
+        : fieldRow('Google review', d.request_review ? 'Will be asked' : 'Not asked')}
     </div>
     ${d.is_quote ? `<div class="dr-sect">
       <div class="dr-sect-t"><i class="ti ti-report-money"></i>Quotation</div>
@@ -1680,6 +1696,9 @@ async function saveDetailsEdit(docketId){
     patch.oneoff_name = txt('dr-e-oneoff-name');
     patch.oneoff_contact = txt('dr-e-oneoff-contact');
   }
+  if(el('dr-e-request-review')){
+    patch.request_review = el('dr-e-request-review').checked;
+  }
   // Re-geocode only when the site text actually changed, to avoid a needless
   // lookup (and possibly overwriting a good pin) on every unrelated edit.
   const prevSite = activeDocket ? (activeDocket.site || null) : undefined;
@@ -1698,6 +1717,11 @@ async function saveDetailsEdit(docketId){
     if(error && isMissingMapColumnsError(error.message)){
       warnMapColumnsMissingOnce();
       delete patch.site_lat; delete patch.site_lng;
+      ({ error } = await sb.from('dockets').update(patch).eq('id', docketId));
+    }
+    if(error && isMissingReviewColumnsError(error.message)){
+      warnReviewColumnsMissingOnce();
+      delete patch.request_review;
       ({ error } = await sb.from('dockets').update(patch).eq('id', docketId));
     }
     if(error) throw error;
@@ -1747,7 +1771,7 @@ function renderDrawerActions(d){
       <button class="btn-p" ${canNext?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveNext('${esc(d.id)}')"><i class="ti ti-arrow-right"></i> Move to next stage</button>
       <button class="btn-p teal" ${canInvoice?'':'disabled style="opacity:0.4;cursor:not-allowed"'} onclick="moveToInvoice('${esc(d.id)}')"><i class="ti ti-receipt-2"></i> Move to Invoice</button>
     </div>
-    ${stage >= 5 ? `<div class="row"><button class="btn-o" style="border-color:#f0b429;color:#8a6100" onclick="requestGoogleReview('${esc(d.id)}')"><i class="ti ti-star"></i> Request Google review</button></div>` : ''}
+    ${stage >= 5 && d.request_review ? `<div class="row"><button class="btn-o" style="border-color:#f0b429;color:#8a6100" onclick="requestGoogleReview('${esc(d.id)}')"><i class="ti ti-star"></i> Request Google review</button></div>` : ''}
     <div class="row">
       <button class="btn-s" onclick="reopenStage('${esc(d.id)}','delivery')">Reopen delivery</button>
       <button class="btn-s" onclick="reopenStage('${esc(d.id)}','pickup')">Reopen pickup</button>
@@ -2640,9 +2664,10 @@ function openClientModal(id){
     $('cm-icon').value = c.icon||'ti-building';
     $('cm-general').checked = !!c.is_general;
     $('cm-waste-reporting').checked = !!c.waste_reporting_enabled;
+    $('cm-request-reviews').checked = !!c.request_reviews;
   } else {
     $('cm-title').textContent = 'Add client';
-    $('cm-name').value=''; $('cm-contact').value=''; $('cm-code').value=''; $('cm-icon').value='ti-building'; $('cm-general').checked=false; $('cm-waste-reporting').checked=false;
+    $('cm-name').value=''; $('cm-contact').value=''; $('cm-code').value=''; $('cm-icon').value='ti-building'; $('cm-general').checked=false; $('cm-waste-reporting').checked=false; $('cm-request-reviews').checked=false;
   }
   $('cm-err').classList.remove('show');
   $('cm-bk').classList.add('on');
@@ -2723,6 +2748,7 @@ async function saveClient(){
   const icon = $('cm-icon').value;
   const isGen = $('cm-general').checked;
   const wasteReporting = $('cm-waste-reporting').checked;
+  const requestReviews = $('cm-request-reviews').checked;
   const err = $('cm-err'); err.classList.remove('show');
   if(!name || !code){ err.textContent='Name and short code are required.'; err.classList.add('show'); return; }
   if(!/^[a-z0-9_-]+$/.test(code)){ err.textContent='Short code: lowercase letters, numbers, dash or underscore only.'; err.classList.add('show'); return; }
@@ -2730,9 +2756,19 @@ async function saveClient(){
   try {
     let r;
     if(_editingClientId){
-      r = await sb.from('clients').update({ name, contact: contact||null, short_code: code, icon, is_general: isGen, waste_reporting_enabled: wasteReporting }).eq('id', _editingClientId);
+      r = await sb.from('clients').update({ name, contact: contact||null, short_code: code, icon, is_general: isGen, waste_reporting_enabled: wasteReporting, request_reviews: requestReviews }).eq('id', _editingClientId);
     } else {
-      r = await sb.from('clients').insert([{ name, contact: contact||null, short_code: code, icon, is_general: isGen, active: true, waste_reporting_enabled: wasteReporting }]).select();
+      r = await sb.from('clients').insert([{ name, contact: contact||null, short_code: code, icon, is_general: isGen, active: true, waste_reporting_enabled: wasteReporting, request_reviews: requestReviews }]).select();
+    }
+    if(r.error && isMissingReviewColumnsError(r.error.message)){
+      // migration_009 hasn't been run yet — drop the review default and
+      // retry so the rest of the client's details still save.
+      warnReviewColumnsMissingOnce();
+      if(_editingClientId){
+        r = await sb.from('clients').update({ name, contact: contact||null, short_code: code, icon, is_general: isGen, waste_reporting_enabled: wasteReporting }).eq('id', _editingClientId);
+      } else {
+        r = await sb.from('clients').insert([{ name, contact: contact||null, short_code: code, icon, is_general: isGen, active: true, waste_reporting_enabled: wasteReporting }]).select();
+      }
     }
     if(r.error) throw r.error;
     const convertingDocketId = _convertFromDocketId;
@@ -3130,6 +3166,7 @@ function openNewDocket(){
   $('nd-quote-notes').value = '';
   $('nd-quote-photos').value = '';
   renderNdQuotePhotoCount();
+  $('nd-request-review').checked = false;
   $('nd-bk').classList.add('on');
   $('nd-drawer').classList.add('on');
   // Listen for client change to toggle one-off block
@@ -3138,6 +3175,10 @@ function openNewDocket(){
     const isGen = c && (c.is_general || /general/i.test(c.name||''));
     $('nd-oneoff-block').style.display = isGen ? '' : 'none';
     updateNdSiteField(c);
+    // Default the review-request tick from the client's own "ask this client
+    // for reviews" setting (Clients screen) — still just a default, office
+    // can untick/tick it per job before saving.
+    $('nd-request-review').checked = !!(c && c.request_reviews);
   };
   setTimeout(() => sel.focus(), 80);
 }
@@ -3258,6 +3299,7 @@ async function saveNewDocket(){
       is_quote: isQuote,
       quote_items: quoteItems,
       quote_notes: quoteNotes,
+      request_review: $('nd-request-review').checked,
       created_by: currentUser ? currentUser.id : null
     };
     let { error: insErr } = await sb.from('dockets').insert([row]);
@@ -3266,6 +3308,13 @@ async function saveNewDocket(){
       // the order still saves; the Bin map just won't have this site plotted.
       warnMapColumnsMissingOnce();
       delete row.site_lat; delete row.site_lng;
+      ({ error: insErr } = await sb.from('dockets').insert([row]));
+    }
+    if(insErr && isMissingReviewColumnsError(insErr.message)){
+      // migration_009 hasn't been run yet — drop the review flag and retry so
+      // the order still saves; the review tick just won't be remembered yet.
+      warnReviewColumnsMissingOnce();
+      delete row.request_review;
       ({ error: insErr } = await sb.from('dockets').insert([row]));
     }
     if(insErr) throw insErr;
