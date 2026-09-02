@@ -3618,15 +3618,27 @@ async function generateQuotePDF(docketId){
       await drawPhotoGrid(photoDataUrls);
     }
 
-    // ── What happens next — Delivery / Pickup / Disposal ────────────────────
+    // ── What you'll receive — Delivery / Pickup / Disposal ──────────────────
     // This is a QUOTATION — nothing here has happened yet, so every stage is
-    // always shown as a blank "not yet" placeholder, regardless of what the
-    // docket record actually holds. Showing real progress data here would
-    // misrepresent a document whose whole purpose is "this is only an
-    // estimate, sent before the job has started." Once the job is under way,
-    // the driver/office "Client PDF" (generateDocketPDF) is the document that
-    // reports real, dated progress — this one deliberately never does.
+    // always shown as a blank "pending quote approval" placeholder, regardless
+    // of what the docket record actually holds. Showing real progress data
+    // here would misrepresent a document whose whole purpose is "this is only
+    // an estimate, sent before the job has started." Once the job is under
+    // way, the driver/office "Client PDF" (generateDocketPDF) is the document
+    // that reports real, dated progress — this one deliberately never does.
     const AMBER = _hex('#B8860B'), AMBERBG = [253, 247, 231], AMBERLN = [232, 194, 120];
+
+    function drawPendingApprovalPill(){
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+      const text = 'PENDING QUOTE APPROVAL';
+      const w = doc.getTextWidth(text) + 6;
+      const x = PW - M - w;
+      doc.setFillColor.apply(doc, AMBER);
+      doc.roundedRect(x, cursorY - 4.2, w, 5.4, 1.3, 1.3, 'F');
+      doc.setTextColor(255,255,255);
+      doc.text(text, x + w/2, cursorY - 0.7, { align:'center' });
+      doc.setTextColor.apply(doc, DARK);
+    }
 
     function drawUpcomingStage(title, text){
       ensureSpace(12);
@@ -3634,6 +3646,7 @@ async function generateQuotePDF(docketId){
       doc.circle(M + 1.3, cursorY - 1.6, 1.3, 'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, DARK);
       doc.text(title, M + 6, cursorY);
+      drawPendingApprovalPill();
       cursorY += 7;
       const lines = doc.splitTextToSize(text, PW - 2*M - 10);
       const h = lines.length * 4.3 + 7;
@@ -3651,20 +3664,20 @@ async function generateQuotePDF(docketId){
     doc.setDrawColor.apply(doc, LIGHTC); doc.setLineWidth(0.3);
     doc.line(M, cursorY, PW - M, cursorY); cursorY += 8;
     doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor.apply(doc, DARK);
-    doc.text('What happens next', M, cursorY); cursorY += 5;
+    doc.text('What you\'ll receive', M, cursorY); cursorY += 5;
     doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, GREY);
-    doc.text('This is a quotation only — none of the stages below have happened yet. A full record for each will be provided once your job is under way.', M, cursorY);
+    doc.text('Once you accept this quote, your job moves ahead and each of the sections below is completed and provided as part of your documentation.', M, cursorY);
     cursorY += 8;
 
-    drawUpcomingStage('Waste Delivery', 'Not yet scheduled — delivery details and a photo of your bin on site will be provided once it\'s been dropped off.');
-    drawUpcomingStage('Waste Pickup', 'Not yet collected — pickup details will be provided once your bin has been picked up.');
-    drawUpcomingStage('Waste Disposal', 'Not yet disposed — the disposal record will be provided once your waste has been taken to the landfill or recycling facility.');
+    drawUpcomingStage('Waste Delivery', 'Awaiting quote approval — once accepted, delivery details and a photo of your bin on site will be provided here.');
+    drawUpcomingStage('Waste Pickup', 'Awaiting quote approval — once accepted and your bin is picked up, pickup details will be provided here.');
+    drawUpcomingStage('Waste Disposal', 'Awaiting quote approval — once accepted and your waste is disposed of, the disposal record will be provided here.');
 
     ensureSpace(18);
     doc.setDrawColor.apply(doc, LIGHTC); doc.setLineWidth(0.3);
     doc.line(M, cursorY, PW - M, cursorY); cursorY += 5;
     doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
-    const disc = 'This quotation is an estimate based on the site visit and photos attached above, and is valid for 30 days from the date above. Pricing and scope cover only the items and quantities shown in these photos — items not visible here, discovered later, or added after this visit may incur additional charges. Delivery, pickup and disposal have not yet occurred — full records for each stage will be provided once your job is complete.';
+    const disc = 'This quotation is an estimate based on the site visit and photos attached above, and is valid for 30 days from the date above. Pricing and scope cover only the items and quantities shown in these photos — items not visible here, discovered later, or added after this visit may incur additional charges. Delivery, pickup and disposal are shown above as pending your approval of this quote — full records for each stage will be provided once your job is under way.';
     const discLines = doc.splitTextToSize(disc, PW - 2*M);
     doc.text(discLines, M, cursorY);
 
