@@ -3319,13 +3319,22 @@ async function saveNewDocket(){
     }
     if(insErr) throw insErr;
     registerNdNewSiteIfNeeded(client);
+    let quotePhotoFailCount = 0;
     for(const file of quotePhotoFiles){
       try {
         const path = id + '/quote_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '.jpg';
         const { error: upErr } = await sb.storage.from('docket-photos').upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false });
         if(upErr) throw upErr;
-        await sb.from('photos').insert([{ docket_id: id, zone: 'quote', storage_path: path, uploaded_by: currentUser ? currentUser.id : null }]);
-      } catch(e){ console.error('quote photo upload', e); }
+        // insert() resolves with {error} on a DB-side rejection (RLS, a check
+        // constraint) rather than throwing — left unchecked, a rejected
+        // insert looked identical to a successful one: the file would sit in
+        // Storage with no row in `photos`, and the photo would silently
+        // vanish from the docket/PDF with no warning anywhere. This is what
+        // was actually happening to every quote photo (driver- and
+        // office-uploaded alike) — see migration_010_quote_photo_zone.sql.
+        const { error: photoInsErr } = await sb.from('photos').insert([{ docket_id: id, zone: 'quote', storage_path: path, uploaded_by: currentUser ? currentUser.id : null }]);
+        if(photoInsErr) throw photoInsErr;
+      } catch(e){ console.error('quote photo upload', e); quotePhotoFailCount++; }
     }
     try {
       await sb.from('audit_log').insert([{
@@ -3337,7 +3346,7 @@ async function saveNewDocket(){
       }]);
     } catch(e){ console.warn('audit log (order_created) failed', e); }
     closeNewDocket();
-    showToast((isQuote ? 'Quotation ' : 'Order ') + id + ' saved.' + (isQuote ? '' : ' Awaiting delivery driver.'));
+    showToast((isQuote ? 'Quotation ' : 'Order ') + id + ' saved.' + (isQuote ? '' : ' Awaiting delivery driver.') + (quotePhotoFailCount ? ' ' + quotePhotoFailCount + ' photo' + (quotePhotoFailCount>1?'s':'') + ' failed to attach — try re-adding via Edit docket details.' : ''));
     // Realtime will refresh the board; force-load too in case the subscription is slow
     loadDocketsFromDB();
   } catch(e){
