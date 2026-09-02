@@ -1762,7 +1762,7 @@ function renderDrawerActions(d){
   const canNext = stage < 6;
   const canInvoice = stage < 6;
   $('dr-actions').innerHTML = `
-    ${d.is_quote ? `<div class="row"><button class="btn-o" onclick="generateQuotePDF('${esc(d.id)}')"><i class="ti ti-report-money"></i> Download Quotation PDF</button></div>` : ''}
+    ${d.is_quote ? `<div class="row"><button class="btn-o" onclick="generateQuotePDF('${esc(d.id)}')"><i class="ti ti-report-money"></i> Download Quote &amp; Job Status PDF (for client)</button></div>` : ''}
     <div class="row">
       <button class="btn-o" onclick="generateDocketPDF('${esc(d.id)}','client')"><i class="ti ti-file-text"></i> Download Client PDF</button>
       <button class="btn-o" onclick="generateDocketPDF('${esc(d.id)}','internal')"><i class="ti ti-file-invoice"></i> Download Internal PDF</button>
@@ -3512,13 +3512,18 @@ async function generateQuotePDF(docketId){
     if(dErr) throw dErr;
     if(!docket){ showToast('Docket not found'); return; }
 
-    const { data: photoRows } = await sb.from('photos').select('*').eq('docket_id', docketId).eq('zone','quote').order('uploaded_at', { ascending:true });
-    const photoDataUrls = [];
-    for(const p of (photoRows||[])){
-      const { data: pub } = sb.storage.from('docket-photos').getPublicUrl(p.storage_path);
-      const dataUrl = await _urlToDataURL(pub.publicUrl);
-      if(dataUrl) photoDataUrls.push(dataUrl);
+    const { data: allPhotoRows } = await sb.from('photos').select('*').in('zone', ['quote','arr','pu','tip']).eq('docket_id', docketId).order('uploaded_at', { ascending:true });
+    async function _zonePhotoDataUrls(zone){
+      const rows = (allPhotoRows||[]).filter(p => p.zone === zone);
+      const urls = [];
+      for(const p of rows){
+        const { data: pub } = sb.storage.from('docket-photos').getPublicUrl(p.storage_path);
+        const dataUrl = await _urlToDataURL(pub.publicUrl);
+        if(dataUrl) urls.push(dataUrl);
+      }
+      return urls;
     }
+    const photoDataUrls = await _zonePhotoDataUrls('quote');
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit:'mm', format:'a4' });
@@ -3585,15 +3590,14 @@ async function generateQuotePDF(docketId){
       cursorY += noteLines.length * 4.5 + 6;
     }
 
-    if(photoDataUrls.length){
-      ensureSpace(14);
-      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor.apply(doc, DARK);
-      doc.text('Site photos', M, cursorY); cursorY += 6;
+    async function drawPhotoGrid(urls, maxShow){
+      const show = maxShow ? urls.slice(0, maxShow) : urls;
+      if(!show.length) return;
       const gap = 6;
       const colW = (PW - 2*M - gap) / 2;
-      const maxH = 55;
-      for(let i=0;i<photoDataUrls.length;i+=2){
-        const rowUrls = photoDataUrls.slice(i, i+2);
+      const maxH = 50;
+      for(let i=0;i<show.length;i+=2){
+        const rowUrls = show.slice(i, i+2);
         const sizes = await Promise.all(rowUrls.map(u => _imgSize(u)));
         let rowH = 0;
         const dims = sizes.map(s => {
@@ -3612,11 +3616,122 @@ async function generateQuotePDF(docketId){
       }
     }
 
+    if(photoDataUrls.length){
+      ensureSpace(14);
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor.apply(doc, DARK);
+      doc.text('Site photos', M, cursorY); cursorY += 6;
+      await drawPhotoGrid(photoDataUrls);
+    }
+
+    // ── Job progress — Delivery / Pickup / Disposal ─────────────────────────
+    // Shown on every quote PDF so this becomes the one document that follows
+    // the job from quote through to completion, rather than promising a
+    // separate report later. Each stage renders its real details once the
+    // driver has recorded them, or a warm "not yet" placeholder until then.
+    const AMBER = _hex('#B8860B'), AMBERBG = [253, 247, 231], AMBERLN = [232, 194, 120];
+
+    function drawStagePill(label, isDone){
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+      const text = isDone ? 'COMPLETED' : 'PENDING';
+      const w = doc.getTextWidth(text) + 6;
+      const x = PW - M - w;
+      doc.setFillColor.apply(doc, isDone ? GREEN : AMBER);
+      doc.roundedRect(x, cursorY - 4.2, w, 5.4, 1.3, 1.3, 'F');
+      doc.setTextColor(255,255,255);
+      doc.text(text, x + w/2, cursorY - 0.7, { align:'center' });
+      doc.setTextColor.apply(doc, DARK);
+    }
+
+    function drawStageHeading(title, isDone){
+      ensureSpace(12);
+      doc.setFillColor.apply(doc, isDone ? GREEN : AMBER);
+      doc.circle(M + 1.3, cursorY - 1.6, 1.3, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, DARK);
+      doc.text(title, M + 6, cursorY);
+      drawStagePill('', isDone);
+      cursorY += 7;
+    }
+
+    function drawStageDetails(rows){
+      ensureSpace(rows.length * 5.5 + 4);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      rows.forEach(([label, val]) => {
+        doc.setTextColor.apply(doc, GREY);
+        doc.text(label, M + 4, cursorY);
+        doc.setTextColor.apply(doc, DARK);
+        doc.text(String(val), M + 48, cursorY);
+        cursorY += 5.5;
+      });
+      cursorY += 3;
+    }
+
+    function drawStagePending(text){
+      const lines = doc.splitTextToSize(text, PW - 2*M - 10);
+      const h = lines.length * 4.3 + 7;
+      ensureSpace(h + 4);
+      doc.setFillColor.apply(doc, AMBERBG);
+      doc.setDrawColor.apply(doc, AMBERLN); doc.setLineWidth(0.3);
+      doc.roundedRect(M, cursorY, PW - 2*M, h, 1.5, 1.5, 'FD');
+      doc.setFont('helvetica','italic'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, [122,92,20]);
+      doc.text(lines, M + 5, cursorY + 5.5);
+      doc.setTextColor.apply(doc, DARK);
+      cursorY += h + 6;
+    }
+
+    ensureSpace(16);
+    doc.setDrawColor.apply(doc, LIGHTC); doc.setLineWidth(0.3);
+    doc.line(M, cursorY, PW - M, cursorY); cursorY += 8;
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor.apply(doc, DARK);
+    doc.text('Job progress', M, cursorY); cursorY += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, GREY);
+    doc.text('This section will fill in automatically as your job moves through delivery, pickup and disposal.', M, cursorY);
+    cursorY += 8;
+
+    const deliveryDone = !!docket.arr_date;
+    drawStageHeading('Waste Delivery', deliveryDone);
+    if(deliveryDone){
+      drawStageDetails([
+        ['Delivered', (_dpDate(docket.arr_date) || '—') + (docket.arr_time ? ' at ' + docket.arr_time : '')],
+        ['Bin(s)', (docket.bins_delivered||[]).map(b=>'#'+b).join(', ') || '—']
+      ]);
+      const arrPhotos = await _zonePhotoDataUrls('arr');
+      await drawPhotoGrid(arrPhotos, 2);
+    } else {
+      drawStagePending('Not yet scheduled — delivery details and a photo of your bin on site will appear here once it\'s been dropped off.');
+    }
+
+    const pickupDone = !!docket.pu_date;
+    drawStageHeading('Waste Pickup', pickupDone);
+    if(pickupDone){
+      drawStageDetails([
+        ['Picked up', (_dpDate(docket.pu_date) || '—') + (docket.pu_time ? ' at ' + docket.pu_time : '')],
+        ['Bin(s)', (docket.bins_picked_up||[]).map(b=>'#'+b).join(', ') || '—']
+      ]);
+      const puPhotos = await _zonePhotoDataUrls('pu');
+      await drawPhotoGrid(puPhotos, 2);
+    } else {
+      drawStagePending('Not yet collected — pickup details will appear here once your bin has been picked up.');
+    }
+
+    const disposalDone = !!docket.dis_date;
+    drawStageHeading('Waste Disposal', disposalDone);
+    if(disposalDone){
+      drawStageDetails([
+        ['Disposed', _dpDate(docket.dis_date) || '—'],
+        ['Facility', docket.facility || '—'],
+        ['Net weight', docket.weight != null ? Number(docket.weight).toFixed(2) + ' t' : '—']
+      ]);
+      const tipPhotos = await _zonePhotoDataUrls('tip');
+      await drawPhotoGrid(tipPhotos, 2);
+    } else {
+      drawStagePending('Not yet disposed — the disposal record will appear here once your waste has been taken to the landfill or recycling facility.');
+    }
+
     ensureSpace(18);
     doc.setDrawColor.apply(doc, LIGHTC); doc.setLineWidth(0.3);
     doc.line(M, cursorY, PW - M, cursorY); cursorY += 5;
     doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
-    const disc = 'This quotation is an estimate based on the site visit and photos attached above, and is valid for 30 days from the date above. Pricing and scope cover only the items and quantities shown in these photos — items not visible here, discovered later, or added after this visit may incur additional charges. A formal quote and invoice will follow separately. Full job documentation — delivery, pickup and disposal records — will be provided once the job has been completed.';
+    const disc = 'This quotation is an estimate based on the site visit and photos attached above, and is valid for 30 days from the date above. Pricing and scope cover only the items and quantities shown in these photos — items not visible here, discovered later, or added after this visit may incur additional charges. The Job progress section above will update as your job moves through delivery, pickup and disposal — this document reflects the latest status as of the date generated below.';
     const discLines = doc.splitTextToSize(disc, PW - 2*M);
     doc.text(discLines, M, cursorY);
 
