@@ -1409,6 +1409,15 @@ async function generateQuotePDF() {
     job.stage = 1;
     job.submittedBy = driver ? driver.name : (job.submittedBy || '');
 
+    // Snapshot the quote photos for the PDF BEFORE uploading. uploadDocketPhotos()
+    // deliberately strips each photo out of currentPhotos.quote once it's
+    // successfully persisted (so a retry doesn't re-send it) — reading
+    // currentPhotos.quote for the PDF *after* that call meant a fully
+    // successful upload left nothing behind to embed, and the PDF's "Site
+    // photos" section silently came out empty every time. This snapshot is
+    // local (still the original data URLs) and unaffected by the upload.
+    const quotePhotosForPdf = (currentPhotos.quote || []).slice();
+
     const ok = await saveDocketToDB(job, 'order', 'quote:generated');
     if(!ok) return;
     registerNewSiteIfNeeded(FOLDERS.find(f => f.name === data.client));
@@ -1480,7 +1489,7 @@ async function generateQuotePDF() {
       cursorY += noteLines.length * 4.5 + 6;
     }
 
-    const photoList = currentPhotos.quote || [];
+    const photoList = quotePhotosForPdf;
     if(photoList.length){
       ensureSpace(14);
       doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor.apply(doc, DARK);
@@ -2284,7 +2293,15 @@ async function uploadDocketPhotos(docketId) {
         const path = docketId+'/'+zone+'_'+Date.now()+'_'+i+'.jpg';
         const { error: upErr } = await sb.storage.from('docket-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
         if(upErr) throw upErr;
-        await sb.from('photos').insert([{ docket_id: docketId, zone, storage_path: path, uploaded_by: (currentDriver && currentDriver.id) || null }]);
+        // Supabase's insert() resolves with {error} on a DB-side rejection
+        // (RLS, a check constraint) rather than throwing — this used to go
+        // unchecked, so a rejected insert looked identical to a successful
+        // one: the file would sit in Storage with no row in `photos`, and
+        // the photo would silently vanish from the docket/PDF with no
+        // warning at all. Checking and throwing here is what makes that
+        // failure actually count as failed (kept for retry, toast shown).
+        const { error: insErr } = await sb.from('photos').insert([{ docket_id: docketId, zone, storage_path: path, uploaded_by: (currentDriver && currentDriver.id) || null }]);
+        if(insErr) throw insErr;
       } catch(e) { console.error('photo upload', zone, e); anyFailed = true; remaining.push(item); }
     }
     // Only keep photos that actually failed queued up — successful ones are
