@@ -987,35 +987,124 @@ function clientNameOf(row){ if(row.oneoff_name) return row.oneoff_name; if(row.c
 // compositionPct gives a weighted-average waste-type breakdown across the
 // whole project (each docket's pickup composition %, weighted by that
 // docket's tonnage) — used by the Project Report PDF for ISO 14001 records.
+// ── WASTE COMPOSITION (recorded by the driver at DISPOSAL) ──────────────────
+// waste_pcts is a JSONB map key -> integer % of the tipped load. Keys must stay
+// in sync with WASTE_COMP in driver/index.html. Legacy keys from the old
+// pickup-stage form (construction, demolition, ...) are included.
+const WASTE_COMP_META = {
+  steel:['Steel / ferrous','Metals'], stainless:['Stainless steel','Metals'], aluminium:['Aluminium','Metals'], copper:['Copper','Metals'],
+  nonferrous:['Other non-ferrous metals','Metals'], metal_roofing:['Metal roofing & cladding','Metals'],
+  cardboard:['Cardboard & paper','Paper, plastics & packaging'], plastics:['Plastics (general)','Paper, plastics & packaging'],
+  plastic_pipe:['PVC / plastic pipe','Paper, plastics & packaging'], polystyrene:['Polystyrene (EPS)','Paper, plastics & packaging'],
+  concrete:['Concrete','Masonry & heavy'], bricks:['Bricks & pavers','Masonry & heavy'], tiles:['Tiles (roof / ceramic)','Masonry & heavy'],
+  asphalt:['Asphalt / bitumen','Masonry & heavy'], rock:['Rock, gravel & sand','Masonry & heavy'],
+  soil:['Soil / excavated (non-VENM)','Masonry & heavy'], venm:['VENM','Masonry & heavy'],
+  timber_clean:['Timber – clean / untreated','Timber & plant'], timber_treated:['Timber – treated / engineered','Timber & plant'],
+  pallets:['Pallets','Timber & plant'], green:['Green waste','Timber & plant'], fogo:['FOGO','Timber & plant'],
+  plasterboard:['Plasterboard','Building finishes'], glass:['Glass','Building finishes'], carpet:['Carpet & underlay','Building finishes'],
+  flooring:['Vinyl, laminate & other flooring','Building finishes'], insulation:['Insulation','Building finishes'],
+  fibre_cement:['Fibre cement (non-asbestos)','Building finishes'], ceramics:['Sanitary ware & ceramics','Building finishes'],
+  appliances:['Appliances & whitegoods','Fixtures & goods'], furniture:['Furniture','Fixtures & goods'], mattresses:['Mattresses','Fixtures & goods'], tyres:['Tyres','Fixtures & goods'],
+  construction:['Mixed construction','Other'], demolition:['Mixed demolition','Other'], general:['General / household waste','Other'],
+  other:['Other','Other'], contaminated:['Contaminated / suspect','Other']
+};
+const DEST_LABEL = { recycled:'Recycled', reused:'Reused', landfill:'Landfill' };
+const money = n => (n==null || !isFinite(n)) ? '—' : '$' + Number(n).toLocaleString('en-AU',{minimumFractionDigits:2, maximumFractionDigits:2});
+// Where each material in a docket went: per-material destination from the driver
+// (waste_dest) when present, otherwise the office's docket-level Disposal Outcome.
+function _outcomeToDest(out){ return out==='Recycled'||out==='Recovered' ? 'recycled' : out==='Reused' ? 'reused' : out==='Landfill' ? 'landfill' : ''; }
+// Compact "where did it go" text for a docket: per-material split when the driver
+// recorded destinations, otherwise the office's docket-level outcome.
+function _outcomeSummary(d){
+  const st = aggregateWasteStats([d]);
+  if(d.waste_dest && Object.keys(d.waste_dest).some(k => ['recycled','reused','landfill'].includes(d.waste_dest[k])) && st.classifiedT > 0){
+    const bits = [];
+    if(st.recycledPct > 0.5) bits.push(st.recycledPct.toFixed(0)+'% recycled');
+    if(st.reusedPct > 0.5) bits.push(st.reusedPct.toFixed(0)+'% reused');
+    if(st.landfillPct > 0.5) bits.push(st.landfillPct.toFixed(0)+'% landfill');
+    return bits.join(', ') || 'Pending';
+  }
+  return d.disposal_outcome || 'Pending';
+}
+function docketMaterialDest(d, k){
+  const wd = d && d.waste_dest;
+  if(wd && ['recycled','reused','landfill'].includes(wd[k])) return wd[k];
+  return _outcomeToDest(d && d.disposal_outcome);
+}
+function wasteLabel(k){
+  if(WASTE_COMP_META[k]) return WASTE_COMP_META[k][0];
+  const t = String(k).replace(/_/g,' '); return t.charAt(0).toUpperCase() + t.slice(1);
+}
+// Per-docket composition rows with ESTIMATED tonnes / m³ (pct x recorded
+// weight / volume). Largest share first.
+function docketCompRows(d){
+  const pcts = (d && d.waste_pcts) || {};
+  const w = parseFloat(d && d.weight), c = parseFloat(d && d.cbm);
+  return Object.entries(pcts).map(([k,v]) => ({ key:k, label:wasteLabel(k), pct:parseFloat(v)||0,
+      t: isFinite(w) && w > 0 ? w * (parseFloat(v)||0) / 100 : null,
+      cbm: isFinite(c) && c > 0 ? c * (parseFloat(v)||0) / 100 : null }))
+    .filter(r => r.pct > 0).map(r => ({...r, dest: docketMaterialDest(d, r.key), other: r.key==='other' && d.waste_dest && d.waste_dest._other ? d.waste_dest._other : ''}))
+    .sort((a,b) => b.pct - a.pct);
+}
+
 function aggregateWasteStats(dockets){
-  let totalT = 0, classifiedT = 0, divertedT = 0, recycledT = 0, count = 0;
-  let totalCbm = 0;
+  let totalT = 0, classifiedT = 0, divertedT = 0, recycledT = 0, reusedT = 0, landfillT = 0, count = 0;
+  let totalCbm = 0, totalCost = 0, costCount = 0, costWeightT = 0;
   let firstDate = null, lastDate = null;
   const compSums = {}, compWeighted = { basis: 0 };
+  const compT = {}, compCbm = {}, compDest = {};
   (dockets||[]).forEach(d => {
     if(d.voided) return;
     const w = parseFloat(d.weight);
     const hasWeight = isFinite(w) && w > 0;
+    const rc = parseFloat(d.receipt_ex_gst);
+    if(isFinite(rc) && rc >= 0 && d.receipt_ex_gst != null && d.receipt_ex_gst !== ''){ totalCost += rc; costCount++; if(hasWeight) costWeightT += w; }
+    const pcts = d.waste_pcts || {};
+    const hasPcts = pcts && Object.keys(pcts).length > 0;
+    const wd = d.waste_dest || {};
+    const hasDest = hasPcts && Object.keys(wd).some(k => ['recycled','reused','landfill'].includes(wd[k]));
     if(hasWeight){
       count++;
       totalT += w;
-      const out = d.disposal_outcome || '';
-      if(out){
-        classifiedT += w;
-        if(out !== 'Landfill') divertedT += w;
-        if(out === 'Recycled') recycledT += w;
+      if(hasDest){
+        // Classify each material's share of the load by where the driver sent it
+        Object.entries(pcts).forEach(([k,v]) => {
+          const pv = parseFloat(v); if(!(isFinite(pv) && pv > 0)) return;
+          const dest = wd[k], t = w * pv / 100;
+          if(['recycled','reused','landfill'].includes(dest)){
+            classifiedT += t;
+            if(dest === 'landfill') landfillT += t; else divertedT += t;
+            if(dest === 'recycled') recycledT += t;
+            if(dest === 'reused') reusedT += t;
+          }
+        });
+      } else {
+        const out = d.disposal_outcome || '';
+        if(out){
+          classifiedT += w;
+          if(out === 'Landfill') landfillT += w; else divertedT += w;
+          if(out === 'Recycled') recycledT += w;
+          if(out === 'Reused') reusedT += w;
+        }
       }
-      const pcts = d.waste_pcts || {};
-      if(pcts && Object.keys(pcts).length){
+      if(hasPcts){
         compWeighted.basis += w;
         Object.entries(pcts).forEach(([k,v]) => {
           const pv = parseFloat(v);
-          if(isFinite(pv) && pv > 0) compSums[k] = (compSums[k]||0) + pv * w;
+          if(isFinite(pv) && pv > 0){
+            compSums[k] = (compSums[k]||0) + pv * w; compT[k] = (compT[k]||0) + w * pv / 100;
+            const dst = docketMaterialDest(d, k) || 'unclassified';
+            const cd = compDest[k] = compDest[k] || { recycled:0, reused:0, landfill:0, unclassified:0 };
+            cd[dst] += w * pv / 100;
+          }
         });
       }
     }
     const cbm = parseFloat(d.cbm);
-    if(isFinite(cbm) && cbm > 0) totalCbm += cbm;
+    if(isFinite(cbm) && cbm > 0){
+      totalCbm += cbm;
+      Object.entries(pcts).forEach(([k,v]) => { const pv = parseFloat(v); if(isFinite(pv) && pv > 0) compCbm[k] = (compCbm[k]||0) + cbm * pv / 100; });
+    }
     const dt = d.dis_date || d.submitted_at || d.date;
     if(dt){
       const dv = new Date(dt);
@@ -1027,11 +1116,18 @@ function aggregateWasteStats(dockets){
   });
   const compositionPct = {};
   Object.entries(compSums).forEach(([k,sum]) => { compositionPct[k] = compWeighted.basis > 0 ? (sum / compWeighted.basis) : 0; });
+  const compRows = Object.keys(compSums).map(k => ({
+    key:k, label:wasteLabel(k), pct: compositionPct[k], t: compT[k]||0, cbm: compCbm[k]||0,
+    dest: compDest[k] || { recycled:0, reused:0, landfill:0, unclassified:0 }
+  })).sort((a,b) => b.t - a.t);
   return {
-    count, totalT, classifiedT, divertedT, recycledT, totalCbm, compositionPct,
+    count, totalT, classifiedT, divertedT, recycledT, reusedT, landfillT, totalCbm, compositionPct, compRows,
+    totalCost, costCount, costPerT: costWeightT > 0 ? totalCost / costWeightT : null,
     unclassifiedT: Math.max(0, totalT - classifiedT),
     divertedPct: classifiedT > 0 ? (divertedT / classifiedT * 100) : null,
     recycledPct: classifiedT > 0 ? (recycledT / classifiedT * 100) : null,
+    reusedPct: classifiedT > 0 ? (reusedT / classifiedT * 100) : null,
+    landfillPct: classifiedT > 0 ? (landfillT / classifiedT * 100) : null,
     firstDate, lastDate
   };
 }
@@ -1559,9 +1655,76 @@ function drSiteFieldHtml(d, client){
   </div>`;
 }
 
+// ── Office composition editor (back-fill older dockets) ─────────────────────
+// Lets the office enter / correct material %, destination and receipt value for
+// dockets completed before the driver app captured them (or fix a driver's entry).
+let drComp = { pcts:{}, dest:{}, other:'' };
+function _compInit(d){
+  drComp = { pcts:{}, dest:{}, other:'' };
+  Object.entries((d && d.waste_pcts) || {}).forEach(([k,v]) => { const n = parseInt(v); if(n > 0) drComp.pcts[k] = n; });
+  const wd = (d && d.waste_dest) || {};
+  Object.keys(drComp.pcts).forEach(k => { if(['recycled','reused','landfill'].includes(wd[k])) drComp.dest[k] = wd[k]; });
+  drComp.other = wd._other || '';
+}
+function _compTotal(){ return Object.values(drComp.pcts).reduce((a,b)=>a+b,0); }
+function renderCompEditor(){
+  const host = $('dr-comp-editor'); if(!host) return;
+  const hasDest = activeDocket && Object.prototype.hasOwnProperty.call(activeDocket,'waste_dest');
+  const keys = Object.keys(drComp.pcts);
+  const selOpts = (cur) => `<option value="">— choose —</option>` + ['recycled','reused','landfill'].map(v => `<option value="${v}" ${cur===v?'selected':''}>${DEST_LABEL[v]}</option>`).join('');
+  const groups = {}; Object.entries(WASTE_COMP_META).forEach(([k,[l,g]]) => { if(!(k in drComp.pcts)) (groups[g] = groups[g] || []).push([k,l]); });
+  const addOpts = `<option value="">+ Add a material…</option>` + Object.entries(groups).map(([g,items]) => `<optgroup label="${esc(g)}">${items.map(([k,l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</optgroup>`).join('');
+  host.innerHTML = `
+    <div class="dr-field" style="grid-column:1/-1"><label>Waste composition — % of load by material (must total 100%)</label>
+      ${hasDest ? '' : '<div class="sm" style="color:#a15c00;margin:4px 0"><i class="ti ti-alert-triangle"></i> Destinations can\'t be saved yet — run database migration 011 first. Percentages will still save.</div>'}
+      ${keys.length ? keys.map(k => `
+        <div style="display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap">
+          <span style="flex:1;min-width:150px;font-size:12px">${esc(wasteLabel(k))}</span>
+          ${k==='other' ? `<input type="text" placeholder="What is it?" value="${esc(drComp.other)}" oninput="drComp.other=this.value" style="width:130px">` : ''}
+          <input type="number" min="0" max="100" value="${drComp.pcts[k]}" style="width:64px" oninput="compPct('${k}',this.value)"> <span style="font-size:11px">%</span>
+          ${hasDest ? `<select onchange="compDest('${k}',this.value)" style="width:110px">${selOpts(drComp.dest[k])}</select>` : ''}
+          <button type="button" class="btn-s" onclick="compRemove('${k}')" title="Remove"><i class="ti ti-x"></i></button>
+        </div>`).join('') : '<div class="sm" style="color:var(--mt);margin:4px 0">No materials recorded yet.</div>'}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <select onchange="compAdd(this.value)" style="max-width:260px">${addOpts}</select>
+        <span id="dr-comp-total" style="margin-left:auto;font-weight:700;font-size:12px"></span>
+      </div>
+    </div>`;
+  _compTotalUpdate();
+}
+function _compTotalUpdate(){
+  const el = $('dr-comp-total'); if(!el) return;
+  const t = _compTotal();
+  el.textContent = 'Total ' + t + '%';
+  el.style.color = t === 100 ? '#155724' : t > 100 ? '#A32D2D' : '#666';
+}
+function compPct(k, v){ const n = Math.max(0, Math.min(100, parseInt(v)||0)); if(n > 0) drComp.pcts[k] = n; else drComp.pcts[k] = 0; _compTotalUpdate(); }
+function compDest(k, v){ if(v) drComp.dest[k] = v; else delete drComp.dest[k]; }
+function compAdd(k){ if(!k) return; drComp.pcts[k] = Math.max(0, 100 - _compTotal()); renderCompEditor(); }
+function compRemove(k){ delete drComp.pcts[k]; delete drComp.dest[k]; renderCompEditor(); }
+// Returns {error} or {pcts, dest} ready to save; nothing entered = clear.
+function _compCollect(){
+  const pcts = {}; Object.entries(drComp.pcts).forEach(([k,v]) => { if(v > 0) pcts[k] = v; });
+  const total = Object.values(pcts).reduce((a,b)=>a+b,0);
+  if(total !== 0 && total !== 100) return { error:'Waste composition must total 100% (currently ' + total + '%).' };
+  const hasDest = activeDocket && Object.prototype.hasOwnProperty.call(activeDocket,'waste_dest');
+  const dest = {};
+  if(hasDest){
+    for(const k of Object.keys(pcts)){
+      if(!drComp.dest[k]) return { error:'Choose Recycled, Reused or Landfill for ' + wasteLabel(k) + '.' };
+      dest[k] = drComp.dest[k];
+    }
+    if(pcts.other && drComp.other.trim()) dest._other = drComp.other.trim();
+  }
+  return { pcts, dest, hasDest };
+}
+
 function renderDrawerDetails(d){
   const pcts = d.waste_pcts || {};
-  const pctList = Object.entries(pcts).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}%`).join(', ');
+  const compRows = docketCompRows(d);
+  const pctList = compRows.length ? `<div class="dr-field" style="grid-column:1/-1"><label>Waste composition (driver estimate)</label><div class="v">` +
+    compRows.map(r => `${esc(r.label)}${r.other?' ('+esc(r.other)+')':''}: <b>${r.pct}%</b>` + (r.t!=null ? ` <span style="color:var(--mt)">≈${r.t.toFixed(2)} t${r.cbm!=null?' · ≈'+r.cbm.toFixed(2)+' m³':''}</span>` : '') + (r.dest ? ` <span style="font-size:10px;padding:1px 6px;border-radius:9px;background:${r.dest==='landfill'?'#eee':r.dest==='reused'?'#dcebf8':'#d9f0e7'};color:#333">${DEST_LABEL[r.dest]}</span>` : ` <span style="font-size:10px;color:#a15c00">destination not set</span>`)).join('<br>') + `</div></div>` : '';
+  const hazFlag = Number(pcts.contaminated) > 0;
   const sub = DRIVERS.find(dr=>dr.id===d.submitted_by);
   const cr = DRIVERS.find(dr=>dr.id===d.created_by);
   const ed = drDetailsEditing;
@@ -1614,7 +1777,6 @@ function renderDrawerDetails(d){
         ${ed ? edRow('Truck rego', 'dr-e-pu-rego', d.pu_rego) : fieldRow('Truck rego', d.pu_rego)}
         ${ed ? edRow('Bins picked up', 'dr-e-bins-pu', (d.bins_picked_up||[]).join(', '), {}) : fieldRow('Bins picked up', (d.bins_picked_up||[]).map(b=>'#'+b).join(', '))}
       </div>
-      ${pctList?fieldRow('Waste composition', pctList):''}
     </div>
     <div class="dr-sect">
       <div class="dr-sect-t"><i class="ti ti-recycle"></i>Disposal (stage 4–5)</div>
@@ -1624,8 +1786,11 @@ function renderDrawerDetails(d){
         ${ed ? edRow('Facility', 'dr-e-facility', d.facility) : fieldRow('Facility', d.facility)}
         ${ed ? edRow('Weight (t)', 'dr-e-weight', d.weight, {type:'number', step:'0.01'}) : fieldRow('Weight (t)', d.weight)}
         ${ed ? edRow('Volume (m³)', 'dr-e-cbm', d.cbm, {type:'number', step:'0.01'}) : fieldRow('Volume (m³)', d.cbm)}
+        ${Object.prototype.hasOwnProperty.call(d,'receipt_ex_gst') ? (ed ? edRow('Receipt ($ ex GST)', 'dr-e-receipt', d.receipt_ex_gst, {type:'number', step:'0.01'}) : fieldRow('Receipt ($ ex GST)', d.receipt_ex_gst!=null ? money(d.receipt_ex_gst) : '')) : ''}
         ${fieldRow('Submitted at', fmtDT(d.submitted_at))}
       </div>
+      ${ed ? '<div id="dr-comp-editor"></div>' : pctList}
+      ${hazFlag?'<div class="sm" style="color:#a32d2d;margin-top:6px"><i class="ti ti-alert-octagon"></i> Driver flagged contaminated / suspect material ('+esc(String(pcts.contaminated))+'%) — follow up before reporting.</div>':''}
     </div>
     <div class="dr-sect">
       <div class="dr-sect-t"><i class="ti ti-user-check"></i>People</div>
@@ -1636,10 +1801,12 @@ function renderDrawerDetails(d){
       </div>
     </div>
   `;
+  if(ed) renderCompEditor();
 }
 
 async function toggleDetailsEdit(){
   drDetailsEditing = true;
+  _compInit(activeDocket);
   if(activeDocket){
     const client = CLIENTS.find(c => c.id === activeDocket.client_id);
     if(client && client.waste_reporting_enabled){
@@ -1689,9 +1856,17 @@ async function saveDetailsEdit(docketId){
     facility: txt('dr-e-facility'),
     weight: num('dr-e-weight'),
     cbm: num('dr-e-cbm'),
+    receipt_ex_gst: num('dr-e-receipt'),
     bins_delivered: bins('dr-e-bins-del'),
     bins_picked_up: bins('dr-e-bins-pu')
   };
+  if(!el('dr-e-receipt')) delete patch.receipt_ex_gst;
+  if(el('dr-comp-editor')){
+    const cc = _compCollect();
+    if(cc.error){ showToast(cc.error); return; }
+    patch.waste_pcts = cc.pcts;
+    if(cc.hasDest) patch.waste_dest = cc.dest;
+  }
   if(el('dr-e-oneoff-name')){
     patch.oneoff_name = txt('dr-e-oneoff-name');
     patch.oneoff_contact = txt('dr-e-oneoff-contact');
@@ -2809,57 +2984,163 @@ async function toggleClientActive(id, active){
 // treated as one project — and shows cumulative tonnage / % diverted from
 // landfill / % recycled for each, using the same aggregateWasteStats() used
 // to build the summary appended to that client's PDFs.
+let _wr = { client:null, rows:[] };
 async function openWasteReportModal(clientId){
   const c = CLIENTS.find(x=>x.id===clientId);
   if(!c) return;
+  _wr = { client:c, rows:[] };
   $('wr-title').textContent = 'Waste diversion report — ' + c.name;
   $('wr-body-content').innerHTML = '<div class="cmp-empty">Loading…</div>';
   $('wr-bk').classList.add('on');
   try {
-    const { data, error } = await sb.from('dockets')
-      .select('id,site,weight,cbm,waste_pcts,disposal_outcome,facility,dis_date,submitted_at,date,voided')
-      .eq('client_id', clientId);
+    const { data, error } = await sb.from('dockets').select('*').eq('client_id', clientId);
     if(error) throw error;
-    const bySite = {};
-    (data||[]).forEach(d => {
-      if(d.voided) return;
-      const key = (d.site || '').trim() || '(no site recorded)';
-      (bySite[key] = bySite[key] || []).push(d);
-    });
-    const siteBlocks = Object.keys(bySite).sort().map(site => {
-      const stats = aggregateWasteStats(bySite[site]);
-      if(stats.count === 0) return '';
-      const period = (stats.firstDate && stats.lastDate) ? (fmtDate(stats.firstDate) + ' – ' + fmtDate(stats.lastDate)) : '—';
-      const divStr = stats.divertedPct != null ? stats.divertedPct.toFixed(0)+'%' : 'Pending classification';
-      const recStr = stats.recycledPct != null ? stats.recycledPct.toFixed(0)+'%' : 'Pending classification';
-      const noteHtml = stats.unclassifiedT > 0.005
-        ? `<div class="sm" style="color:#a15c00;margin-top:6px"><i class="ti ti-alert-triangle"></i> ${stats.unclassifiedT.toFixed(2)} t not yet classified in Compliance — fill in Disposal Outcome on those dockets to complete this project's reporting.</div>`
-        : '';
-      // No real project report for the "no site recorded" bucket — it isn't
-      // one project, just a catch-all for dockets missing a site.
-      const reportBtnHtml = site !== '(no site recorded)'
-        ? `<button class="btn-o sm" style="margin-top:8px" data-client-id="${esc(clientId)}" data-site="${esc(site)}" onclick="generateProjectReportPDF(this)"><i class="ti ti-file-certificate"></i> Download project report (PDF)</button>`
-        : '';
-      return `<div class="dr-sect">
-        <div class="dr-sect-t"><i class="ti ti-map-pin"></i>${esc(site)}</div>
-        <div class="dr-grid">
-          ${fieldRow('Total waste removed', stats.totalT.toFixed(2)+' t')}
-          ${fieldRow('Total volume', stats.totalCbm.toFixed(2)+' m³')}
-          ${fieldRow('Bin services', String(stats.count))}
-          ${fieldRow('Diverted from landfill', divStr)}
-          ${fieldRow('Recycled', recStr)}
-        </div>
-        ${fieldRow('Project period', period)}
-        ${noteHtml}
-        ${reportBtnHtml}
-      </div>`;
-    }).filter(Boolean);
-    $('wr-body-content').innerHTML = siteBlocks.length
-      ? siteBlocks.join('')
-      : '<div class="cmp-empty">No completed disposals recorded for this client yet — totals will appear here once a docket has been weighed at disposal.</div>';
+    _wr.rows = (data||[]).filter(d => !d.voided);
+    $('wr-body-content').innerHTML = `
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
+        <div class="dr-field" style="margin:0"><label>From</label><input type="date" id="wr-from" onchange="renderWasteReportBlocks()"></div>
+        <div class="dr-field" style="margin:0"><label>To</label><input type="date" id="wr-to" onchange="renderWasteReportBlocks()"></div>
+        <button class="btn-s" onclick="$('wr-from').value='';$('wr-to').value='';renderWasteReportBlocks()">Clear dates</button>
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn-o" onclick="downloadWasteCompositionCSV()"><i class="ti ti-download"></i> Materials CSV</button>
+          <button class="btn-o" onclick="downloadWasteDocketsCSV()"><i class="ti ti-download"></i> Dockets CSV</button>
+        </span>
+      </div>
+      <div class="sm" style="color:var(--mt);margin-bottom:8px">Composition and destinations are the driver's estimates at disposal. Tonnes and m³ per material = share × the weighbridge weight / driver's volume estimate. Costs are the receipt totals excluding GST.</div>
+      <div id="wr-backfill"></div>
+      <div id="wr-blocks"></div>`;
+    renderWasteReportBlocks();
   } catch(e){
     $('wr-body-content').innerHTML = '<div class="cmp-empty">Failed to load: ' + esc(e.message) + '</div>';
   }
+}
+function _wrFilteredRows(){
+  const f = $('wr-from') && $('wr-from').value, t = $('wr-to') && $('wr-to').value;
+  return _wr.rows.filter(d => {
+    if(!f && !t) return true;
+    const dv = new Date(d.dis_date || d.submitted_at || d.date); if(isNaN(dv)) return false;
+    const iso = dv.toISOString().slice(0,10);
+    return (!f || iso >= f) && (!t || iso <= t);
+  });
+}
+function _wrGroupBySite(rows){
+  const bySite = {};
+  rows.forEach(d => { const key = (d.site || '').trim() || '(no site recorded)'; (bySite[key] = bySite[key] || []).push(d); });
+  return bySite;
+}
+function _pctStr(v){ return v != null ? v.toFixed(0)+'%' : 'Pending classification'; }
+function _statsGrid(stats){
+  return `<div class="dr-grid">
+      ${fieldRow('Total waste removed', stats.totalT.toFixed(2)+' t')}
+      ${fieldRow('Total volume', stats.totalCbm.toFixed(2)+' m³')}
+      ${fieldRow('Bin services', String(stats.count))}
+      ${fieldRow('Diverted from landfill', _pctStr(stats.divertedPct))}
+      ${fieldRow('Recycled', _pctStr(stats.recycledPct))}
+      ${fieldRow('Reused', _pctStr(stats.reusedPct))}
+      ${fieldRow('Disposal cost (ex GST)', stats.costCount ? money(stats.totalCost) + (stats.costCount < stats.count ? ' ('+stats.costCount+' of '+stats.count+' receipts)' : '') : '—')}
+      ${fieldRow('Avg cost per tonne', stats.costPerT != null ? money(stats.costPerT) : '—')}
+    </div>`;
+}
+function _compTable(stats){
+  if(!stats.compRows.length) return '<div class="sm" style="color:var(--mt);margin-top:8px">No material breakdown recorded for these dockets yet.</div>';
+  const n = v => v > 0.0049 ? v.toFixed(2) : '–';
+  return `
+      <div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px">Waste composition by material (estimated tonnes)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px">
+        <thead><tr style="text-align:right;color:var(--mt);font-size:10px"><th style="text-align:left;padding:3px 4px">Material</th><th style="padding:3px 4px">Share</th><th style="padding:3px 4px">Tonnes</th><th style="padding:3px 4px">m³</th><th style="padding:3px 4px">Recycled t</th><th style="padding:3px 4px">Reused t</th><th style="padding:3px 4px">Landfill t</th></tr></thead>
+        <tbody>${stats.compRows.map(r => `<tr style="border-top:1px solid var(--bd,#eee);text-align:right"><td style="text-align:left;padding:4px">${esc(r.label)}</td><td style="padding:4px">${r.pct.toFixed(0)}%</td><td style="padding:4px">${r.t.toFixed(2)}</td><td style="padding:4px">${r.cbm ? r.cbm.toFixed(2) : '—'}</td><td style="padding:4px">${n(r.dest.recycled)}</td><td style="padding:4px">${n(r.dest.reused)}</td><td style="padding:4px">${n(r.dest.landfill + (r.dest.unclassified||0))}</td></tr>`).join('')}</tbody>
+      </table>`;
+}
+// Completed, weighed dockets still missing composition, per-material destinations or a receipt value
+function _wrNeedsBackfill(d){
+  const miss = [];
+  const pcts = d.waste_pcts || {};
+  if(!Object.keys(pcts).some(k => parseFloat(pcts[k]) > 0)) miss.push('materials');
+  else { const wd = d.waste_dest || {}; if(!Object.keys(pcts).filter(k => parseFloat(pcts[k]) > 0).every(k => ['recycled','reused','landfill'].includes(wd[k]))) miss.push('destinations'); }
+  if(d.receipt_ex_gst == null) miss.push('receipt $');
+  return miss;
+}
+function wrOpenDocket(id){ closeWasteReportModal(); openDrawer(id); toggleDetailsEdit(); }
+function renderWasteReportBackfill(filtered){
+  const host = $('wr-backfill'); if(!host) return;
+  const todo = filtered.filter(d => parseFloat(d.weight) > 0 && (d.stage||0) >= 5).map(d => ({ d, miss:_wrNeedsBackfill(d) })).filter(x => x.miss.length);
+  if(!todo.length){ host.innerHTML = ''; return; }
+  host.innerHTML = `<div class="dr-sect" style="border:1px solid #e8c278;background:#fff8e6;border-radius:8px;padding:10px;margin-bottom:12px">
+    <div class="dr-sect-t" style="color:#7a5200"><i class="ti ti-edit"></i>${todo.length} completed docket${todo.length===1?'':'s'} missing data</div>
+    <div class="sm" style="color:#7a5200;margin-bottom:6px">Click a docket to fill in what was in the bin, where it went and the receipt amount (ex GST) — totals above update as you go.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${todo.map(x => `<button class="btn-s" style="font-size:11px" onclick="wrOpenDocket('${esc(x.d.id)}')">${esc(x.d.id)} <span style="color:#a15c00">· ${x.miss.join(', ')}</span></button>`).join('')}</div>
+  </div>`;
+}
+function renderWasteReportBlocks(){
+  const clientId = _wr.client.id;
+  const filtered = _wrFilteredRows();
+  renderWasteReportBackfill(filtered);
+  const bySite = _wrGroupBySite(filtered);
+  const siteBlocks = Object.keys(bySite).sort().map(site => {
+    const stats = aggregateWasteStats(bySite[site]);
+    if(stats.count === 0) return '';
+    const period = (stats.firstDate && stats.lastDate) ? (fmtDate(stats.firstDate) + ' – ' + fmtDate(stats.lastDate)) : '—';
+    const noteHtml = stats.unclassifiedT > 0.005
+      ? `<div class="sm" style="color:#a15c00;margin-top:6px"><i class="ti ti-alert-triangle"></i> ${stats.unclassifiedT.toFixed(2)} t has no recycled / reused / landfill destination yet — it is excluded from the diversion %.</div>`
+      : '';
+    const reportBtnHtml = site !== '(no site recorded)'
+      ? `<button class="btn-o sm" style="margin-top:8px" data-client-id="${esc(clientId)}" data-site="${esc(site)}" onclick="generateProjectReportPDF(this)"><i class="ti ti-file-certificate"></i> Download project report (PDF)</button>`
+      : '';
+    return `<div class="dr-sect">
+      <div class="dr-sect-t"><i class="ti ti-map-pin"></i>${esc(site)}</div>
+      ${_statsGrid(stats)}
+      ${fieldRow('Project period', period)}
+      ${_compTable(stats)}
+      ${noteHtml}
+      ${reportBtnHtml}
+    </div>`;
+  }).filter(Boolean);
+  // Whole-client rollup across every site in the selected period
+  let allBlock = '';
+  if(siteBlocks.length > 1){
+    const all = aggregateWasteStats(filtered);
+    allBlock = `<div class="dr-sect" style="border:1px solid var(--bd,#ddd);border-radius:8px;padding:10px;margin-bottom:12px">
+      <div class="dr-sect-t"><i class="ti ti-sum"></i>All sites — ${esc(_wr.client.name)}</div>
+      ${_statsGrid(all)}
+      ${_compTable(all)}
+    </div>`;
+  }
+  $('wr-blocks').innerHTML = siteBlocks.length
+    ? allBlock + siteBlocks.join('')
+    : '<div class="cmp-empty">No completed disposals recorded for this client' + (($('wr-from').value||$('wr-to').value) ? ' in that date range' : ' yet') + ' — totals will appear here once a docket has been weighed at disposal.</div>';
+}
+function _downloadCSV(lines, name){
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+const _csvQ = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
+function _csvSlug(){ return _wr.client.name.replace(/[^a-z0-9]+/gi,'-').toLowerCase(); }
+// One row per site × material for the currently filtered period (opens in Excel).
+function downloadWasteCompositionCSV(){
+  const bySite = _wrGroupBySite(_wrFilteredRows());
+  const out = [['Client','Site','Material','Share of weight %','Est. tonnes','Est. m3','Recycled t','Reused t','Landfill t','Unclassified t','Site total tonnes','Site total m3','Site disposal cost ex GST'].map(_csvQ).join(',')];
+  Object.keys(bySite).sort().forEach(site => {
+    const st = aggregateWasteStats(bySite[site]);
+    st.compRows.forEach(r => out.push([_wr.client.name, site, r.label, r.pct.toFixed(1), r.t.toFixed(3), r.cbm.toFixed(2), r.dest.recycled.toFixed(3), r.dest.reused.toFixed(3), r.dest.landfill.toFixed(3), (r.dest.unclassified||0).toFixed(3), st.totalT.toFixed(3), st.totalCbm.toFixed(2), st.totalCost.toFixed(2)].map(_csvQ).join(',')));
+  });
+  if(out.length === 1){ showToast('No material breakdown to export for this period.'); return; }
+  _downloadCSV(out, 'waste-materials-' + _csvSlug() + '.csv');
+}
+// One row per docket (bin service) with weight, volume, outcome and receipt value.
+function downloadWasteDocketsCSV(){
+  const rows = _wrFilteredRows().filter(d => parseFloat(d.weight) > 0).sort((a,b) => String(a.dis_date||a.date||'').localeCompare(String(b.dis_date||b.date||'')));
+  if(!rows.length){ showToast('No weighed dockets to export for this period.'); return; }
+  const out = [['Docket','Client','Site','Disposal date','Facility','Net weight t','Volume m3','Receipt ex GST','Recycled %','Reused %','Landfill %','Disposal outcome (office)','EPA classification'].map(_csvQ).join(',')];
+  rows.forEach(d => {
+    const st = aggregateWasteStats([d]);
+    out.push([d.id, _wr.client.name, d.site||'', d.dis_date||'', d.facility||'', Number(d.weight).toFixed(3), d.cbm!=null?Number(d.cbm).toFixed(2):'', d.receipt_ex_gst!=null?Number(d.receipt_ex_gst).toFixed(2):'',
+      st.recycledPct!=null?st.recycledPct.toFixed(0):'', st.reusedPct!=null?st.reusedPct.toFixed(0):'', st.landfillPct!=null?st.landfillPct.toFixed(0):'', d.disposal_outcome||'', d.epa_classification||''].map(_csvQ).join(','));
+  });
+  _downloadCSV(out, 'waste-dockets-' + _csvSlug() + '.csv');
 }
 function closeWasteReportModal(){ $('wr-bk').classList.remove('on'); }
 
@@ -2881,7 +3162,7 @@ async function generateProjectReportPDF(btnEl){
     const clientName = c ? c.name : 'Client';
 
     const { data: dockets, error } = await sb.from('dockets')
-      .select('id,weight,cbm,waste_pcts,disposal_outcome,facility,dis_date,submitted_at,date,arr_date,bins_delivered,bins_picked_up,voided')
+      .select('*')
       .eq('client_id', clientId)
       .eq('site', site);
     if(error) throw error;
@@ -2935,6 +3216,10 @@ async function generateProjectReportPDF(btnEl){
         ['Bin services', String(stats.count)],
         ['Diverted from landfill', stats.divertedPct != null ? stats.divertedPct.toFixed(0) + '%' : 'Pending classification'],
         ['Recycled', stats.recycledPct != null ? stats.recycledPct.toFixed(0) + '%' : 'Pending classification'],
+        ['Reused', stats.reusedPct != null ? stats.reusedPct.toFixed(0) + '%' : 'Pending classification'],
+        ['Sent to landfill', stats.landfillPct != null ? stats.landfillPct.toFixed(0) + '%' : 'Pending classification'],
+        ['Disposal cost (ex GST)', stats.costCount ? money(stats.totalCost) + (stats.costCount < stats.count ? '  (' + stats.costCount + ' of ' + stats.count + ' receipts recorded)' : '') : '—'],
+        ['Average cost per tonne', stats.costPerT != null ? money(stats.costPerT) : '—'],
         ['Project period', period]
       ],
       theme: 'plain',
@@ -2957,21 +3242,23 @@ async function generateProjectReportPDF(btnEl){
       cursorY += 6;
     }
 
-    // Waste composition breakdown, weighted by docket weight, largest first
-    const compEntries = Object.entries(stats.compositionPct).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]);
+    // Waste composition breakdown by material (driver estimates at disposal), largest first
+    const compEntries = stats.compRows.filter(r => r.pct > 0);
     if(compEntries.length){
       ensureSpace(16);
       doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, DARK);
-      doc.text('Waste Composition', M, cursorY); cursorY += 6;
+      doc.text('Waste Composition by Material', M, cursorY); cursorY += 5;
+      doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
+      doc.text('Driver estimates recorded at disposal; tonnes and volume are estimated from each docket\'s weighbridge weight and volume.', M, cursorY); cursorY += 4;
       doc.autoTable({
         startY: cursorY,
         margin: { left: M, right: M },
-        head: [['Waste Type','Share of Classified Weight']],
-        body: compEntries.map(([k,v]) => [k.charAt(0).toUpperCase()+k.slice(1), v.toFixed(0)+'%']),
+        head: [['Material','Share','Tonnes','Volume (m³)','Recycled (t)','Reused (t)','Landfill (t)']],
+        body: compEntries.map(r => { const f = v => v > 0.0049 ? v.toFixed(2) : '–'; return [r.label, r.pct.toFixed(0)+'%', r.t.toFixed(2), r.cbm ? r.cbm.toFixed(2) : '—', f(r.dest.recycled), f(r.dest.reused), f(r.dest.landfill + (r.dest.unclassified||0))]; }),
         theme: 'plain',
-        styles: { font:'helvetica', fontSize:9, textColor: DARK, cellPadding: 2.5 },
+        styles: { font:'helvetica', fontSize:8.5, textColor: DARK, cellPadding: 2.2 },
         headStyles: { fillColor: GREEN, textColor: [255,255,255], fontStyle:'bold' },
-        columnStyles: { 1: { halign:'right' } }
+        columnStyles: { 1: { halign:'right' }, 2: { halign:'right' }, 3: { halign:'right' }, 4: { halign:'right' }, 5: { halign:'right' }, 6: { halign:'right' } }
       });
       cursorY = doc.lastAutoTable.finalY + 8;
     }
@@ -2988,7 +3275,7 @@ async function generateProjectReportPDF(btnEl){
     doc.autoTable({
       startY: cursorY,
       margin: { left: M, right: M },
-      head: [['Docket','Date','Bins','Facility','Outcome','Weight (t)','Volume (m³)']],
+      head: [['Docket','Date','Bins','Facility','Outcome','Weight (t)','Volume (m³)','Receipt (ex GST)']],
       body: sortedRows.map(d => {
         const bins = (d.bins_picked_up && d.bins_picked_up.length ? d.bins_picked_up : (d.bins_delivered||[])).map(b=>'#'+b).join(', ') || '—';
         return [
@@ -2996,18 +3283,70 @@ async function generateProjectReportPDF(btnEl){
           _dpDate(d.dis_date || d.submitted_at || d.date || d.arr_date) || '—',
           bins,
           d.facility || '—',
-          d.disposal_outcome || 'Pending',
+          _outcomeSummary(d),
           d.weight != null ? Number(d.weight).toFixed(2) : '—',
-          d.cbm != null ? Number(d.cbm).toFixed(2) : '—'
+          d.cbm != null ? Number(d.cbm).toFixed(2) : '—',
+          d.receipt_ex_gst != null ? money(d.receipt_ex_gst) : '—'
         ];
       }),
       theme: 'striped',
       styles: { font:'helvetica', fontSize:8, textColor: DARK, cellPadding: 2.5 },
       headStyles: { fillColor: GREEN, textColor: [255,255,255], fontStyle:'bold' },
       alternateRowStyles: { fillColor: LIGHTC },
-      columnStyles: { 5: { halign:'right' }, 6: { halign:'right' } }
+      foot: [['','','','','Total', stats.totalT.toFixed(2), stats.totalCbm.toFixed(2), stats.costCount ? money(stats.totalCost) : '—']],
+      footStyles: { fillColor: LIGHTC, textColor: DARK, fontStyle:'bold' },
+      showFoot: 'lastPage',
+      columnStyles: { 5: { halign:'right' }, 6: { halign:'right' }, 7: { halign:'right' } }
     });
     cursorY = doc.lastAutoTable.finalY + 10;
+
+    // ── Compliance summary (ISO 14001 / waste management plan evidence) ──
+    {
+      const ids = rows.map(d => d.id);
+      let photoRows = [], venmRows = [], ncRows = [];
+      try { const r = await sb.from('photos').select('docket_id,zone').in('docket_id', ids); photoRows = r.data || []; } catch(e){ console.warn('report photos', e); }
+      try { const r = await sb.from('venm_certificates').select('docket_id').in('docket_id', ids); venmRows = r.data || []; } catch(e){ console.warn('report venm', e); }
+      try { const r = await sb.from('nonconformances').select('docket_id,status').in('docket_id', ids); ncRows = r.data || []; } catch(e){ console.warn('report nc', e); }
+      const weighed = rows.filter(d => parseFloat(d.weight) > 0);
+      const N = weighed.length;
+      const receiptPhoto = new Set(photoRows.filter(p => p.zone === 'rec' || p.zone === 'tip').map(p => p.docket_id));
+      const withReceiptPhoto = weighed.filter(d => receiptPhoto.has(d.id)).length;
+      const withValue = weighed.filter(d => d.receipt_ex_gst != null).length;
+      const withComp = weighed.filter(d => d.waste_pcts && Object.keys(d.waste_pcts).length).length;
+      const withDest = weighed.filter(d => d.waste_dest && Object.keys(d.waste_dest).some(k => ['recycled','reused','landfill'].includes(d.waste_dest[k]))).length;
+      const withEpa = weighed.filter(d => d.epa_classification).length;
+      const venmLoads = weighed.filter(d => Number((d.waste_pcts||{}).venm) > 0 || /VENM/i.test(d.epa_classification||'') || d.waste_type === 'VENM');
+      const venmWithCert = venmLoads.filter(d => venmRows.some(v => v.docket_id === d.id)).length;
+      const contam = weighed.filter(d => Number((d.waste_pcts||{}).contaminated) > 0).length;
+      const openNc = ncRows.filter(n => n.status !== 'closed').length;
+      const ofN = v => v + ' of ' + N;
+      ensureSpace(40);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, DARK);
+      doc.text('Compliance Summary', M, cursorY); cursorY += 5;
+      doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor.apply(doc, GREY);
+      doc.text('Evidence held on file for this project. Records are retained for 7 years.', M, cursorY); cursorY += 4;
+      doc.autoTable({
+        startY: cursorY,
+        margin: { left: M, right: M },
+        head: [['Compliance item','Status']],
+        body: [
+          ['Disposal receipt / tip photos on file', ofN(withReceiptPhoto) + ' bin services'],
+          ['Receipt value (ex GST) recorded', ofN(withValue) + ' bin services'],
+          ['Waste composition recorded', ofN(withComp) + ' bin services'],
+          ['Recycled / reused / landfill destination recorded', ofN(withDest) + ' bin services'],
+          ['EPA waste classification recorded', ofN(withEpa) + ' bin services'],
+          ['VENM loads / certificates on file', venmLoads.length ? venmLoads.length + ' load' + (venmLoads.length===1?'':'s') + ' · ' + venmWithCert + ' with certificate' : 'None recorded'],
+          ['Contaminated / suspect material flagged', contam ? contam + ' bin service' + (contam===1?'':'s') + ' flagged' : 'None flagged'],
+          ['Nonconformances raised', ncRows.length ? ncRows.length + ' total · ' + openNc + ' open' : 'None raised']
+        ],
+        theme: 'grid',
+        styles: { font:'helvetica', fontSize:8.5, textColor: DARK, cellPadding: 2.2, lineColor: LIGHTC, lineWidth: 0.2 },
+        headStyles: { fillColor: GREEN, textColor: [255,255,255], fontStyle:'bold' },
+        columnStyles: { 0: { cellWidth: 95 } }
+      });
+      cursorY = doc.lastAutoTable.finalY + 8;
+    }
+
 
     ensureSpace(24);
     doc.setDrawColor.apply(doc, LIGHTC); doc.setLineWidth(0.3);
@@ -3882,7 +4221,7 @@ async function generateDocketPDF(docketId, copyType){
     // project shows their running totals, not just this one bin's figures.
     async function drawWasteDiversionSummary(){
       const { data: projectDockets, error: pErr } = await sb.from('dockets')
-        .select('id,weight,cbm,waste_pcts,disposal_outcome,dis_date,submitted_at,date,voided')
+        .select('*')
         .eq('client_id', docket.client_id)
         .eq('site', docket.site);
       if(pErr || !projectDockets) return;
@@ -3894,14 +4233,23 @@ async function generateDocketPDF(docketId, copyType){
         ' across ' + stats.count + ' bin service' + (stats.count===1?'':'s') + ' to date.'
       );
       drawTable(
-        ['Total Waste Removed','Total Volume','Diverted from Landfill','Recycled','Project Period'],
+        ['Total Waste Removed','Total Volume','Diverted from Landfill','Recycled','Reused'],
         [
           stats.totalT.toFixed(2) + ' t',
           stats.totalCbm.toFixed(2) + ' m³',
           stats.divertedPct != null ? stats.divertedPct.toFixed(0) + '%' : 'Pending classification',
           stats.recycledPct != null ? stats.recycledPct.toFixed(0) + '%' : 'Pending classification',
-          (stats.firstDate && stats.lastDate) ? (_dpDate(stats.firstDate) + ' – ' + _dpDate(stats.lastDate)) : '—'
+          stats.reusedPct != null ? stats.reusedPct.toFixed(0) + '%' : 'Pending classification'
         ]
+      );
+      drawTable(
+        ['Disposal Cost to Date (ex GST)','Average Cost per Tonne','Project Period'],
+        [
+          stats.costCount ? money(stats.totalCost) + (stats.costCount < stats.count ? ' (' + stats.costCount + ' of ' + stats.count + ' receipts)' : '') : '—',
+          stats.costPerT != null ? money(stats.costPerT) : '—',
+          (stats.firstDate && stats.lastDate) ? (_dpDate(stats.firstDate) + ' – ' + _dpDate(stats.lastDate)) : '—'
+        ],
+        { colWidths: [70, 50, 60] }
       );
       if(stats.unclassifiedT > 0.005){
         ensureSpace(12);
@@ -4124,8 +4472,7 @@ async function generateDocketPDF(docketId, copyType){
     drawDescription(
       'Employees must record the time of skip waste pickup or when a truck has been loaded. ' +
       'This includes an image of the loaded skip or truck and identifying which bin is ready for disposal. ' +
-      'Employees must estimate the percentage of waste in each load based upon the categories given, eg concrete 30%, construction 70%. ' +
-      'The total must not be greater or less than 100%. If VENM waste is identified, the VENM Certificate must also be filled.'
+      'The waste composition is recorded at disposal, once the load has been tipped and can be seen.'
     );
     drawSubsection('Waste Pickup Recording');
     drawTable(
@@ -4140,14 +4487,47 @@ async function generateDocketPDF(docketId, copyType){
       ],
       { colWidths: [26, 22, 30, 26, 36, 34] }
     );
+    drawSignatureBlock('Signature upon Pickup', sigs.pickup);
+
+    drawSectionTitle('Waste Disposal');
+    drawDescription(
+      'Employees must photograph the unloaded waste at the disposal facility. ' +
+      'The Disposal fields must be completed by using the data identified in the Landfill receipt. ' +
+      'The receipt must be photographed and kept for audit purposes.'
+    );
+    drawSubsection('Disposal Recording');
+    drawTable(
+      ['Disposal Date','Disposal Time','Disposal Facility','Net Weight (t)','Cubic Metres (m³)','Receipt (ex GST)'],
+      [
+        _dpDate(docket.dis_date),
+        docket.dis_time || '—',
+        docket.facility || '—',
+        docket.weight != null ? Number(docket.weight).toFixed(2) : '—',
+        docket.cbm != null ? Number(docket.cbm).toFixed(2) : '—',
+        docket.receipt_ex_gst != null ? money(docket.receipt_ex_gst) : '—'
+      ],
+      { colWidths: [26, 20, 46, 26, 28, 34] }
+    );
     const pcts = docket.waste_pcts || {};
-    const pctEntries = Object.entries(pcts).filter(([,v]) => v && Number(v) > 0);
-    if(pctEntries.length){
-      drawPillRow('Waste Type', pctEntries.map(([k]) => k.charAt(0).toUpperCase() + k.slice(1)));
-      pctEntries.forEach(([k,v]) => {
-        const kCap = k.charAt(0).toUpperCase() + k.slice(1);
-        drawLabelPill(kCap + ' %', String(v) + '%');
+    const compRowsD = docketCompRows(docket);
+    if(compRowsD.length){
+      drawSubsection('Waste Composition (driver estimate)');
+      drawDescription(
+        'The driver estimates the percentage of each material in the tipped load, totalling 100%, and records whether each material was recycled, reused or sent to landfill. ' +
+        'Tonnes and cubic metres per material are estimated from the net weight and volume above. If VENM waste is identified, the VENM Certificate must also be filled.'
+      );
+      doc.autoTable({
+        startY: cursorY,
+        margin: { left: M, right: M },
+        head: [['Material','Share of Load','Est. Tonnes','Est. Volume (m³)','Destination']],
+        body: compRowsD.map(r => [r.label + (r.other ? ' (' + r.other + ')' : ''), r.pct + '%', r.t != null ? r.t.toFixed(2) : '—', r.cbm != null ? r.cbm.toFixed(2) : '—', r.dest ? DEST_LABEL[r.dest] : 'Not set']),
+        styles: { font:'helvetica', fontSize: 8, cellPadding: 1.8, lineColor: LIGHT, lineWidth: 0.2, textColor: DARK },
+        headStyles: { fillColor: TABLE_HEAD_BG, textColor:[255,255,255], fontStyle:'bold', fontSize: 8 },
+        columnStyles: { 1:{halign:'right'}, 2:{halign:'right'}, 3:{halign:'right'}, 4:{halign:'left'} },
+        theme: 'grid',
+        rowPageBreak: 'avoid'
       });
+      cursorY = doc.lastAutoTable.finalY + 4;
     }
     if(pcts.venm && Number(pcts.venm) > 0){
       ensureSpace(12);
@@ -4159,26 +4539,16 @@ async function generateDocketPDF(docketId, copyType){
       doc.text('VENM Detected — NATA Certificate Required', M + 3, cursorY + 6);
       cursorY += 12;
     }
-    drawSignatureBlock('Signature upon Pickup', sigs.pickup);
-
-    drawSectionTitle('Waste Disposal');
-    drawDescription(
-      'Employees must photograph the unloaded waste at the disposal facility. ' +
-      'The Disposal fields must be completed by using the data identified in the Landfill receipt. ' +
-      'The receipt must be photographed and kept for audit purposes.'
-    );
-    drawSubsection('Disposal Recording');
-    drawTable(
-      ['Disposal Date','Disposal Time','Disposal Facility','Net Weight (t)','Cubic Metres (m³)'],
-      [
-        _dpDate(docket.dis_date),
-        docket.dis_time || '—',
-        docket.facility || '—',
-        docket.weight != null ? Number(docket.weight).toFixed(2) : '—',
-        docket.cbm != null ? Number(docket.cbm).toFixed(2) : '—'
-      ],
-      { colWidths: [28, 24, 50, 30, 32] }
-    );
+    if(pcts.contaminated && Number(pcts.contaminated) > 0){
+      ensureSpace(12);
+      doc.setFillColor(253,236,234);
+      doc.setDrawColor(226,75,74); doc.setLineWidth(0.3);
+      doc.roundedRect(M, cursorY, PW - 2*M, 9, 1, 1, 'FD');
+      doc.setTextColor.apply(doc, DARK);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text('Contaminated / suspect material flagged by driver (' + pcts.contaminated + '%)', M + 3, cursorY + 6);
+      cursorY += 12;
+    }
     drawSignatureBlock('Signature upon Disposal', sigs.disposal);
 
     if(sigs.delivery || sigs.pickup || sigs.disposal){
