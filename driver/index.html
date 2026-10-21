@@ -190,6 +190,24 @@ input[type="file"]{display:none}
 .pct-f{display:flex;align-items:center;justify-content:space-between;background:#f7f7f7;border-radius:7px;padding:7px 9px}
 .pct-f label{font-size:11px;color:#666;margin:0}
 .pct-f input{width:52px;text-align:right;font-size:13px;font-weight:600;padding:4px 6px;border:1px solid #d0d0d0;border-radius:6px;background:#fff}
+.wc-grp{font-size:9px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
+.wc-grp:first-child{margin-top:4px}
+.wc-row{background:#f7f7f7;border-radius:7px;padding:6px 9px;margin-bottom:4px;border:1px solid transparent}
+.wc-row.on{background:#f1f8f3;border-color:#c8e0cd}
+.wc-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wc-top label{font-size:12px;color:#444;margin:0;flex:1}
+.wc-top input{width:56px;text-align:right;font-size:14px;font-weight:600;padding:5px 6px;border:1px solid #d0d0d0;border-radius:6px;background:#fff}
+.wc-pc{font-size:11px;color:#888;width:12px}
+.wc-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.wc-sub.hidden{display:none}
+.wc-dest{display:flex;gap:4px;flex:1}
+.wc-dest button{flex:1;font-size:11px;font-weight:600;padding:6px 4px;border:1px solid #d0d0d0;border-radius:6px;background:#fff;color:#666}
+.wc-dest button.sel[data-v=recycled]{background:#1D9E75;border-color:#1D9E75;color:#fff}
+.wc-dest button.sel[data-v=reused]{background:#2f7fc1;border-color:#2f7fc1;color:#fff}
+.wc-dest button.sel[data-v=landfill]{background:#777;border-color:#777;color:#fff}
+.wc-sub small{font-size:10px;color:#888;min-width:56px;text-align:right}
+.wc-other{font-size:12px;padding:6px 8px;border:1px solid #d0d0d0;border-radius:6px;background:#fff;width:100%}
+.wc-divsum{font-size:11px;color:#155724;font-weight:600;text-align:right;margin-top:4px}
 .pct-total{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:7px 9px;border-radius:7px;background:#f7f7f7}
 .venm-alert{background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 7px 7px 0;padding:7px 10px;font-size:10px;color:#633806;margin-top:6px}
 
@@ -501,20 +519,6 @@ canvas{display:none}
           <div id="bpp"></div>
         </div>
         <div class="sc">
-          <div class="stitle"><i class="ti ti-percentage"></i>Waste breakdown (must total 100%)</div>
-          <div class="pct-row">
-            <div class="pct-f"><label>Construction %</label><input type="number" id="pc" value="0" min="0" max="100" onchange="updPct()"></div>
-            <div class="pct-f"><label>Concrete %</label><input type="number" id="pco" value="0" min="0" max="100" onchange="updPct()"></div>
-            <div class="pct-f"><label>Demolition %</label><input type="number" id="pd" value="0" min="0" max="100" onchange="updPct()"></div>
-            <div class="pct-f"><label>Green Waste %</label><input type="number" id="pg2" value="0" min="0" max="100" onchange="updPct()"></div>
-            <div class="pct-f"><label>Fogo %</label><input type="number" id="pf" value="0" min="0" max="100" onchange="updPct()"></div>
-            <div class="pct-f"><label>Steel/Metal %</label><input type="number" id="ps" value="0" min="0" max="100" onchange="updPct()"></div>
-            <div class="pct-f"><label>VENM %</label><input type="number" id="pv" value="0" min="0" max="100" onchange="updPct()"></div>
-          </div>
-          <div class="pct-total"><span style="font-size:11px;color:#666">Total</span><span style="font-size:14px;font-weight:700;color:#155724" id="pt">0%</span></div>
-          <div class="venm-alert hidden" id="va"><i class="ti ti-alert-triangle"></i> VENM waste — office will be notified automatically.</div>
-        </div>
-        <div class="sc">
           <div class="stitle"><i class="ti ti-camera"></i>Pickup photo (loaded)
             <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Auto-stamped</span>
           </div>
@@ -566,6 +570,19 @@ canvas{display:none}
           <div class="field" style="margin-top:8px"><label>Cubic metres (m³) — your estimate</label>
             <input type="number" id="fcbm" step="0.1" placeholder="e.g. 2.5" oninput="updR()">
           </div>
+          <div class="field" style="margin-top:8px"><label>Receipt total ($) — excluding GST</label>
+            <input type="number" id="f-receipt" step="0.01" min="0" inputmode="decimal" placeholder="e.g. 184.50">
+            <div style="font-size:10px;color:#888;margin-top:3px">The tip / recycler receipt amount before GST. Used to total disposal costs per site for the client. Leave blank if there was no charge.</div>
+          </div>
+        </div>
+        <div class="sc" id="wc-card">
+          <div class="stitle"><i class="ti ti-percentage"></i>What was in the bin? (must total 100%)</div>
+          <div class="cbm-note"><i class="ti ti-info-circle"></i> Estimate the % of the tipped load for each material you can see — leave the rest at 0. For each material you enter, confirm where it went: Recycled, Reused or Landfill (a usual destination is pre-selected — change it if it's wrong).</div>
+          <div id="wc-groups"></div>
+          <div class="pct-total"><span style="font-size:11px;color:#666">Total</span><span style="font-size:14px;font-weight:700;color:#666" id="pt">0%</span></div>
+          <div class="wc-divsum" id="wc-div"></div>
+          <div class="venm-alert hidden" id="va"><i class="ti ti-alert-triangle"></i> VENM waste — office will be notified automatically.</div>
+          <div class="venm-alert hidden" id="wc-haz" style="background:#fdecea;border-left-color:#E24B4A;color:#7a1f1f"><i class="ti ti-alert-octagon"></i> Contaminated / suspect material flagged — do not tip as clean fill. Add a photo and a note in comments so the office can follow up.</div>
         </div>
         <div class="sc">
           <div class="stitle"><i class="ti ti-camera"></i>Disposal photos
@@ -802,7 +819,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-08-31.2';
+const APP_BUILD = 'build 2026-10-21.1';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -1000,11 +1017,12 @@ function continueJob(jobId) {
   if(j.facility) document.getElementById('f-facility').value = j.facility;
   if(j.weight) document.getElementById('fw').value = j.weight;
   if(j.cbm) document.getElementById('fcbm').value = j.cbm;
+  { const rc = document.getElementById('f-receipt'); if(rc) rc.value = (j.receiptExGst!=null && j.receiptExGst!=='') ? j.receiptExGst : ''; }
   // Set bins
   selB.d = new Set(j.bins_del||[]);
   selB.p = new Set(j.bins_pu||[]);
   // Set pcts
-  if(j.pcts) { Object.entries({construction:'pc',concrete:'pco',demolition:'pd',green:'pg2',fogo:'pf',steel:'ps',venm:'pv'}).forEach(([k,id])=>{ const e=document.getElementById(id); if(e)e.value=j.pcts[k]||0; }); updPct(); }
+  setWasteComp(j.pcts, j.dest);
   // Set sigs — normalise legacy boolean sigs to object form
   currentSigs = {};
   ['delivery','pickup','disposal'].forEach(stage => {
@@ -1082,9 +1100,10 @@ function editSubmittedJob(jobId) {
   if(j.facility) document.getElementById('f-facility').value = j.facility;
   if(j.weight) document.getElementById('fw').value = j.weight;
   if(j.cbm) document.getElementById('fcbm').value = j.cbm;
+  { const rc = document.getElementById('f-receipt'); if(rc) rc.value = (j.receiptExGst!=null && j.receiptExGst!=='') ? j.receiptExGst : ''; }
   selB.d = new Set(j.bins_del||[]);
   selB.p = new Set(j.bins_pu||[]);
-  if(j.pcts) { Object.entries({construction:'pc',concrete:'pco',demolition:'pd',green:'pg2',fogo:'pf',steel:'ps',venm:'pv'}).forEach(([k,id])=>{ const e=document.getElementById(id); if(e)e.value=j.pcts[k]||0; }); updPct(); }
+  setWasteComp(j.pcts, j.dest);
   // Normalise legacy boolean sigs to object form, same as continueJob()
   currentSigs = {};
   ['delivery','pickup','disposal'].forEach(stage => {
@@ -1122,6 +1141,9 @@ async function saveSubmittedEdit() {
     if(navigator.onLine === false) { showToast('Offline — cannot save right now. Try again when you have signal.'); return; }
     const job = submittedJobs.find(x => x.id === editingSubmittedId);
     if(!job) { showToast('Could not find that docket to update.'); return; }
+    { const wcTot = wasteCompTotal();
+      if(wcTot !== 0 && wcTot !== 100) { showInlineAlert(4, 'Waste breakdown must total 100% (currently '+wcTot+'%).'); return; }
+      if(wcTot === 100 && wasteCompMissingDest().length) { showInlineAlert(4, 'Choose Recycled, Reused or Landfill for every material you entered.'); return; } }
     const data = gatherFormData();
     Object.assign(job, data);
     const folderEntry = FOLDERS.find(f => f.name === data.client);
@@ -1274,18 +1296,110 @@ function tb(z,n,gId,tId,sId){ if(selB[z].has(n))selB[z].delete(n);else selB[z].a
 function rt(z,tId){ const el=document.getElementById(tId); if(!el)return; const s=[...selB[z]].sort((a,b)=>a-b); el.innerHTML=s.length?s.map(n=>'<span class="btag">Bin '+n+'<button onclick="rb(event,\''+z+'\','+n+')">&times;</button></span>').join(''):'<span style="font-size:9px;color:#aaa">No bins selected</span>'; }
 function rb(e,z,n){ e.stopPropagation(); selB[z].delete(n); rg(z,'bg'+z,'bt'+z,document.getElementById('bs'+z)?.value||''); }
 
+// ── DISPOSAL WASTE COMPOSITION ─────────────────────────────────────────────
+// Stored in dockets.waste_pcts (key -> integer %) and dockets.waste_dest
+// (key -> 'recycled'|'reused'|'landfill', plus '_other' free text). Keys never
+// change once used — office analytics read them. [key, label, default destination]
+const WASTE_COMP = [
+  { grp:'Metals', items:[ ['steel','Steel / ferrous','recycled'], ['stainless','Stainless steel','recycled'], ['aluminium','Aluminium','recycled'], ['copper','Copper','recycled'], ['nonferrous','Other non-ferrous (brass, lead, zinc)','recycled'], ['metal_roofing','Metal roofing & cladding','recycled'] ] },
+  { grp:'Paper, plastics & packaging', items:[ ['cardboard','Cardboard & paper','recycled'], ['plastics','Plastics (general)','landfill'], ['plastic_pipe','PVC / plastic pipe','landfill'], ['polystyrene','Polystyrene (EPS)','landfill'] ] },
+  { grp:'Masonry & heavy', items:[ ['concrete','Concrete','recycled'], ['bricks','Bricks & pavers','recycled'], ['tiles','Tiles (roof / ceramic)','landfill'], ['asphalt','Asphalt / bitumen','recycled'], ['rock','Rock, gravel & sand','recycled'], ['soil','Soil / excavated (non-VENM)','reused'], ['venm','VENM','reused'] ] },
+  { grp:'Timber & plant', items:[ ['timber_clean','Timber – clean / untreated','recycled'], ['timber_treated','Timber – treated / engineered','landfill'], ['pallets','Pallets','reused'], ['green','Green waste','recycled'], ['fogo','FOGO','recycled'] ] },
+  { grp:'Building finishes', items:[ ['plasterboard','Plasterboard','landfill'], ['glass','Glass','recycled'], ['carpet','Carpet & underlay','landfill'], ['flooring','Vinyl, laminate & other flooring','landfill'], ['insulation','Insulation','landfill'], ['fibre_cement','Fibre cement (non-asbestos)','landfill'], ['ceramics','Sanitary ware & ceramics','landfill'] ] },
+  { grp:'Fixtures & goods', items:[ ['appliances','Appliances & whitegoods','recycled'], ['furniture','Furniture','reused'], ['mattresses','Mattresses','landfill'], ['tyres','Tyres','recycled'] ] },
+  { grp:'Other', items:[ ['construction','Mixed construction','landfill'], ['demolition','Mixed demolition','landfill'], ['general','General / household waste','landfill'], ['other','Other (type it in)','landfill'], ['contaminated','Contaminated / suspect (flag)','landfill'] ] }
+];
+const WASTE_COMP_KEYS = WASTE_COMP.flatMap(g => g.items.map(i => i[0]));
+const WASTE_DEFAULT_DEST = Object.fromEntries(WASTE_COMP.flatMap(g => g.items.map(i => [i[0], i[2]])));
+const DEST_OPTS = [['recycled','Recycled'],['reused','Reused'],['landfill','Landfill']];
+let wcDest = {};
+
+function buildWasteComp() {
+  const host = document.getElementById('wc-groups');
+  if(!host || host.dataset.built) return;
+  host.innerHTML = WASTE_COMP.map(g =>
+    '<div class="wc-grp">'+g.grp+'</div>'+
+    g.items.map(([k,l]) =>
+      '<div class="wc-row" id="wcr-'+k+'">'+
+        '<div class="wc-top"><label for="wc-'+k+'">'+l+'</label>'+
+        '<input type="number" inputmode="numeric" id="wc-'+k+'" value="0" min="0" max="100" onchange="onWcPct(\''+k+'\')" oninput="onWcPct(\''+k+'\')"><span class="wc-pc">%</span></div>'+
+        '<div class="wc-sub hidden" id="wcs-'+k+'">'+
+          (k==='other' ? '<input type="text" class="wc-other" id="wc-other-desc" placeholder="What is it?" maxlength="60" style="grid-column:1/-1">' : '')+
+          '<div class="wc-dest">'+DEST_OPTS.map(([v,t]) => '<button type="button" id="wcd-'+k+'-'+v+'" data-v="'+v+'" onclick="setWcDest(\''+k+'\',\''+v+'\')">'+t+'</button>').join('')+'</div>'+
+          '<small id="wct-'+k+'"></small>'+
+        '</div>'+
+      '</div>'
+    ).join('')
+  ).join('');
+  host.dataset.built = '1';
+}
+
+function onWcPct(k) {
+  const e = document.getElementById('wc-'+k);
+  const v = parseInt(e && e.value || 0) || 0;
+  // First time a material is entered, pre-select its usual destination (driver can change it)
+  if(v > 0 && !wcDest[k]) wcDest[k] = WASTE_DEFAULT_DEST[k] || 'landfill';
+  if(v === 0) delete wcDest[k];
+  updPct();
+}
+function setWcDest(k, v) { wcDest[k] = v; updPct(); }
+
+function getWasteComp() {
+  const out = {};
+  WASTE_COMP_KEYS.forEach(k => { out[k] = Math.max(0, Math.min(100, parseInt(document.getElementById('wc-'+k)?.value||0)||0)); });
+  return out;
+}
+// Destination map for materials that have a % (+ the free-text name for 'other')
+function getWasteDest() {
+  const c = getWasteComp(), out = {};
+  WASTE_COMP_KEYS.forEach(k => { if(c[k] > 0) out[k] = wcDest[k] || ''; });
+  const od = (document.getElementById('wc-other-desc')?.value || '').trim();
+  if(c.other > 0 && od) out._other = od;
+  return out;
+}
+function setWasteComp(p, dest) {
+  buildWasteComp();
+  p = p || {}; dest = dest || {};
+  wcDest = {};
+  WASTE_COMP_KEYS.forEach(k => {
+    const e = document.getElementById('wc-'+k); if(e) e.value = Number(p[k])||0;
+    if((Number(p[k])||0) > 0) wcDest[k] = ['recycled','reused','landfill'].includes(dest[k]) ? dest[k] : ''; // legacy dockets: driver must choose
+  });
+  const od = document.getElementById('wc-other-desc'); if(od) od.value = dest._other || '';
+  updPct();
+}
+function wasteCompTotal() { return Object.values(getWasteComp()).reduce((a,b)=>a+b,0); }
+function wasteCompMissingDest() { const c = getWasteComp(); return WASTE_COMP_KEYS.filter(k => c[k] > 0 && !wcDest[k]); }
+
 function updPct() {
-  const ids=['pc','pco','pd','pg2','pf','ps','pv'];
-  const tot=ids.reduce((s,id)=>{const e=document.getElementById(id);return s+(parseInt(e?.value||0)||0);},0);
-  const el=document.getElementById('pt');
-  if(el){el.textContent=tot+'%';el.style.color=tot===100?'#155724':tot>100?'#A32D2D':'#666';}
-  document.getElementById('va').classList.toggle('hidden',(parseInt(document.getElementById('pv').value)||0)===0);
+  const c = getWasteComp();
+  const tot = Object.values(c).reduce((a,b)=>a+b,0);
+  const el = document.getElementById('pt');
+  if(el){ el.textContent = tot+'%'; el.style.color = tot===100 ? '#155724' : tot>100 ? '#A32D2D' : '#666'; }
+  const t = parseFloat(document.getElementById('fw')?.value)||0;
+  WASTE_COMP_KEYS.forEach(k => {
+    const on = c[k] > 0;
+    const sub = document.getElementById('wcs-'+k); if(sub) sub.classList.toggle('hidden', !on);
+    const row = document.getElementById('wcr-'+k); if(row) row.classList.toggle('on', on);
+    DEST_OPTS.forEach(([v]) => { const b = document.getElementById('wcd-'+k+'-'+v); if(b) b.classList.toggle('sel', wcDest[k] === v); });
+    const sm = document.getElementById('wct-'+k); if(sm) sm.textContent = (on && t>0) ? '≈ '+(t*c[k]/100).toFixed(2)+' t' : '';
+  });
+  // Live diversion summary from the chosen destinations
+  const ds = document.getElementById('wc-div');
+  if(ds){
+    let rec=0, reu=0, lf=0;
+    WASTE_COMP_KEYS.forEach(k => { if(c[k]>0){ const d = wcDest[k]; if(d==='recycled') rec+=c[k]; else if(d==='reused') reu+=c[k]; else if(d==='landfill') lf+=c[k]; } });
+    ds.textContent = tot>0 ? ('Recycled '+rec+'% · Reused '+reu+'% · Landfill '+lf+'%') : '';
+  }
+  const va = document.getElementById('va'); if(va) va.classList.toggle('hidden', c.venm===0);
+  const hz = document.getElementById('wc-haz'); if(hz) hz.classList.toggle('hidden', c.contaminated===0);
 }
 
 function updR() {
   const t=parseFloat(document.getElementById('fw')?.value)||0;
   document.getElementById('wt').textContent=t>0?t.toFixed(3):'—';
   document.getElementById('wkg').textContent=t>0?Math.round(t*1000).toLocaleString():'—';
+  updPct();
 }
 
 // ── QUOTATION ────────────────────────────────────────────────────────────
@@ -1714,9 +1828,8 @@ function resetForm() {
   ['f-bintype','f-facility'].forEach(id=>{const e=document.getElementById(id);if(e)e.selectedIndex=0;});
   selWasteTypes = new Set(['Construction']);
   renderWasteTypePicker();
-  ['pc','pco','pd','pg2','pf','ps','pv'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=0;});
-  document.getElementById('pt').textContent='0%';
-  document.getElementById('va').classList.add('hidden');
+  setWasteComp({}, {});
+  { const rc = document.getElementById('f-receipt'); if(rc) rc.value=''; }
   photos={arr:[],pu:[]};
   currentPhotos={arr:[],pu:[],tip:[],rec:[],quote:[]};
   ['pg-arr','pg-pu','pg-quote','pg-arr-existing','pg-pu-existing','pg-dis-existing'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
@@ -2044,6 +2157,8 @@ function rowToJob(row) {
     puRego: row.pu_rego || '',
     bins_pu: row.bins_picked_up || [],
     pcts: row.waste_pcts || {},
+    dest: row.waste_dest || {},
+    receiptExGst: row.receipt_ex_gst != null ? row.receipt_ex_gst : null,
     disDate: row.dis_date || '',
     disTime: row.dis_time || '',
     facility: row.facility || '',
@@ -2091,6 +2206,8 @@ function jobToRow(job, stageKey) {
     pu_rego: job.puRego || null,
     bins_picked_up: job.bins_pu || [],
     waste_pcts: job.pcts || {},
+    waste_dest: job.dest || {},
+    receipt_ex_gst: job.receiptExGst != null ? job.receiptExGst : null,
     dis_date: job.disDate || null,
     dis_time: job.disTime || null,
     facility: job.facility || null,
@@ -2313,7 +2430,15 @@ async function uploadDocketPhotos(docketId) {
 
 async function saveDocketToDB(job, stageKey, auditAction) {
   try {
-    const { error } = await sb.from('dockets').upsert(jobToRow(job, stageKey), { onConflict: 'id' });
+    let rowData = jobToRow(job, stageKey);
+    let { error } = await sb.from('dockets').upsert(rowData, { onConflict: 'id' });
+    // If migration_011 hasn't been run yet the new columns don't exist — save without them
+    // rather than lose the whole docket, and warn so the office runs the migration.
+    if(error && /waste_dest|receipt_ex_gst/.test(error.message || '')) {
+      const { waste_dest, receipt_ex_gst, ...legacyRow } = rowData;
+      ({ error } = await sb.from('dockets').upsert(legacyRow, { onConflict: 'id' }));
+      if(!error) showToast('Saved, but destinations & receipt $ were NOT stored — office must run database migration 011.');
+    }
     if(error) throw error;
     const action = auditAction || (stageKey === 'order' ? 'saved:order' : 'signed:'+stageKey);
     await sb.from('audit_log').insert([{ docket_id: job.id, action, performed_by: (currentDriver && currentDriver.id) || null }]);
@@ -2333,6 +2458,7 @@ function bootApp() {
 }
 
 async function init() {
+  buildWasteComp();
   try {
     const { data: { session } } = await sb.auth.getSession();
     if(!session) { showLoginScreen(); return; }
@@ -2474,15 +2600,9 @@ function gatherFormData() {
     puTime: document.getElementById('f-pu-time').value || '',
     puRego: document.getElementById('f-pu-rego').value || '',
     bins_pu: [...selB.p],
-    pcts: {
-      construction: parseInt(document.getElementById('pc')?.value||0)||0,
-      concrete:     parseInt(document.getElementById('pco')?.value||0)||0,
-      demolition:   parseInt(document.getElementById('pd')?.value||0)||0,
-      green:        parseInt(document.getElementById('pg2')?.value||0)||0,
-      fogo:         parseInt(document.getElementById('pf')?.value||0)||0,
-      steel:        parseInt(document.getElementById('ps')?.value||0)||0,
-      venm:         parseInt(document.getElementById('pv')?.value||0)||0
-    },
+    pcts: Object.fromEntries(Object.entries(getWasteComp()).filter(([,v])=>v>0)),
+    dest: getWasteDest(),
+    receiptExGst: (()=>{ const v=parseFloat(document.getElementById('f-receipt')?.value); return isFinite(v) && v>=0 ? Math.round(v*100)/100 : null; })(),
     disDate: document.getElementById('f-dis-date').value || '',
     disTime: document.getElementById('f-dis-time').value || '',
     facility: document.getElementById('f-facility').value || '',
@@ -2561,6 +2681,12 @@ async function saveAndExit(stageKey) {
         const ooEl = document.getElementById('f-oneoff-name');
         if(!ooEl || !ooEl.value) { showInlineAlert(1, 'Enter the one-off client name.'); return; }
       }
+    }
+    if(stageKey === 'disposal') {
+      const wcTot = wasteCompTotal();
+      if(wcTot > 100) { showInlineAlert(4, 'Waste breakdown adds up to '+wcTot+'% — it must not be more than 100%.'); return; }
+      if(hasSig && wcTot === 100) { const miss = wasteCompMissingDest(); if(miss.length) { showInlineAlert(4, 'Choose Recycled, Reused or Landfill for every material you entered.'); return; } }
+      if(hasSig && wcTot !== 100) { showInlineAlert(4, 'Waste breakdown must total exactly 100% before signing disposal (currently '+wcTot+'%).'); return; }
     }
     if(navigator.onLine === false) {
       showToast('Offline — cannot save right now. Try again when you have signal.');
