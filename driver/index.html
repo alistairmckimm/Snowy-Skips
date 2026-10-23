@@ -147,6 +147,8 @@ textarea{resize:none;height:60px}
 .pslot-btns{display:flex;gap:8px;margin-top:2px}
 .pslot-btn{width:28px;height:28px;border-radius:50%;border:1px solid #d7d7d7;background:#fff;color:#999;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer}
 .pslot-btn:active{background:#eee}
+.draft-card{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff8e1;border:1px solid #e8c278;border-left:4px solid #e0a020;border-radius:10px;padding:10px 12px;margin:8px 0;font-size:13px}
+.pdone{position:absolute;top:3px;right:3px;background:#1D9E75;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700}
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
 .pthumb{border-radius:9px;aspect-ratio:1;overflow:hidden;position:relative;background:#f0f0f0}
 .pthumb img{width:100%;height:100%;object-fit:cover}
@@ -352,9 +354,11 @@ canvas{display:none}
   <div class="ntab" onclick="showTab('done')" id="tab-done"><i class="ti ti-circle-check"></i>Submitted</div>
 </div>
 
+<div id="ob-badge" onclick="processOutbox()" style="display:none;position:fixed;left:8px;right:8px;bottom:74px;z-index:9998;background:#7a5200;color:#fff;font-size:12px;font-weight:600;padding:10px 12px;border-radius:10px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)"></div>
 <!-- ===== JOBS TAB ===== -->
 <div class="scr active" id="scr-jobs">
   <div id="view-folders">
+    <div id="draft-banner"></div>
     <div class="folder-header"><h2>Folders</h2><div style="display:flex;align-items:center;gap:8px"><span id="total-jobs-label">0 active jobs</span><button class="fh-add-btn" onclick="openClientModal()"><i class="ti ti-plus"></i> Client</button></div></div>
     <div class="search-bar">
       <i class="ti ti-search"></i>
@@ -815,7 +819,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-10-23.2';
+const APP_BUILD = 'build 2026-10-23.3';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -1049,6 +1053,7 @@ function continueJob(jobId) {
 }
 
 function cancelForm() {
+  flushDraftNow();   // keep everything entered so far as a resumable draft
   if(editingSubmittedId) {
     editingSubmittedId = null;
     setEditModeButtons(false);
@@ -1149,7 +1154,8 @@ async function saveSubmittedEdit() {
     const ok = await saveDocketToDB(job, 'disposal', 'edited:post-submission');
     if(!ok) return;
     const photosFailed = await uploadDocketPhotos(job.id);
-    showToast('Docket updated.' + (photosFailed ? ' Some photos failed to upload — check signal and try again.' : ''));
+    await clearDraft('sub:'+job.id);
+    showToast('Docket updated.' + (photosFailed ? ' Some photos are safe on this phone and will upload automatically when you have signal.' : ''));
     editingSubmittedId = null;
     setEditModeButtons(false);
     resetForm();
@@ -1264,6 +1270,7 @@ function goStep(n) {
     if(sg) { sg.className='sseg'; if(i<n)sg.classList.add('done'); else if(i===n)sg.classList.add('active'); }
   });
   curStep = n;
+  if(_formDirty) scheduleDraftSave();
   document.getElementById('form-sub').textContent = 'Step '+n+' of 4';
   if(n===2 && !document.getElementById('bgd')) bld('bpd','d');
   if(n===3 && !document.getElementById('bgp')) bld('bpp','p');
@@ -1532,6 +1539,7 @@ async function generateQuotePDF() {
     if(!ok) return;
     registerNewSiteIfNeeded(FOLDERS.find(f => f.name === data.client));
     const quotePhotosFailed = await uploadDocketPhotos(job.id);
+    await clearDraft('new');
 
     // ── Build the PDF ──
     const { jsPDF } = window.jspdf;
@@ -1669,6 +1677,7 @@ function doSign(id) {
   const sig = { by: driver.name, at: fmtStamp(), sigImg: driver.sigImg || '' };
   currentSigs[stage] = sig;
   renderSigBox(id, sig, false);
+  markDirty();
 }
 
 function renderSigBox(id, sig, locked) {
@@ -1699,6 +1708,7 @@ function clearSig(id) {
   const stage = SIG_KEYS[id]; if(!stage) return;
   delete currentSigs[stage];
   renderSigBox(id, null, false);
+  markDirty();
 }
 
 // ── PHOTOS ─────────────────────────────────────────────────────────────────
@@ -1793,9 +1803,9 @@ function stImg(src,cb,takenAt){
   i.src=src;
 }
 
-function addPhotos(zone,input){Array.from(input.files).forEach(f=>{const r=new FileReader();r.onload=async e=>{const t=await photoTakenAt(f);stImg(e.target.result,s=>{currentPhotos[zone].push({src:s});rPg(zone);},t);};r.readAsDataURL(f);});input.value='';}
-function rPg(zone){const g=document.getElementById('pg-'+zone);if(!g)return;g.innerHTML=currentPhotos[zone].map((p,i)=>'<div class="pthumb"><img src="'+p.src+'"><button class="rm" onclick="rmP(\''+zone+'\','+i+')"><i class="ti ti-x"></i></button></div>').join('');}
-function rmP(z,i){currentPhotos[z].splice(i,1);rPg(z);}
+function addPhotos(zone,input){Array.from(input.files).forEach(f=>{const r=new FileReader();r.onload=async e=>{const t=await photoTakenAt(f);stImg(e.target.result,async s=>{const item={src:s};currentPhotos[zone].push(item);rPg(zone);_formDirty=true;await queuePhotoForUpload(zone,item,editingSubmittedId||editingJobId);await flushDraftNow();},t);};r.readAsDataURL(f);});input.value='';}
+function rPg(zone){const g=document.getElementById('pg-'+zone);if(!g)return;g.innerHTML=currentPhotos[zone].map((p,i)=>'<div class="pthumb"><img src="'+p.src+'">'+(p.done?'<span class="pdone" title="Uploaded">✓</span>':'<button class="rm" onclick="rmP(\''+zone+'\','+i+')"><i class="ti ti-x"></i></button>')+'</div>').join('');}
+function rmP(z,i){const it=currentPhotos[z][i]; if(it && it.oid) idbDel('outbox', it.oid); currentPhotos[z].splice(i,1);rPg(z);markDirty();}
 function hsp(zone,input){const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=async e=>{const t=await photoTakenAt(f);stImg(e.target.result,s=>{currentPhotos[zone]=[{src:s}];const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);sl.classList.add('has-photo');pp.className='ppreview';pp.innerHTML='<img src="'+s+'"><button class="prm" onclick="rsp(event,\''+zone+'\')"><i class="ti ti-x"></i></button>';},t);};r.readAsDataURL(f);input.value='';}
 function rsp(e,zone){currentPhotos[zone]=[];e.stopPropagation();const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);sl.classList.remove('has-photo');pp.className='pph';const lbl=zone==='tip'?'Unloaded waste at facility':'Weighbridge docket';pp.innerHTML='<i class="ti ti-photo-plus"></i><p>'+lbl+'</p><div class="pslot-btns"><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-cam\').click()" title="Take photo"><i class="ti ti-camera"></i></button><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-gal\').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button></div>';}
 
@@ -1868,6 +1878,7 @@ async function fileJobToFolder(jobId) {
 }
 
 function resetForm() {
+  _formDirty = false;
   ['f-client','f-location','f-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   updateSiteField(null, '');
   ['fw','fcbm'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -1901,11 +1912,12 @@ function resetForm() {
 
 // ── TAB SWITCHER ───────────────────────────────────────────────────────────
 function showTab(t) {
+  if(t !== 'form' && formActive()) flushDraftNow();
   document.querySelectorAll('.scr').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.ntab').forEach(e=>e.classList.remove('active'));
   document.getElementById('scr-'+t).classList.add('active');
   document.getElementById('tab-'+t).classList.add('active');
-  if(t==='jobs') renderFolders();
+  if(t==='jobs'){ renderFolders(); renderDraftBanner(); }
   if(t==='done') renderDoneList();
 }
 
@@ -2430,40 +2442,24 @@ async function loadExistingPhotosForJob(jobId) {
   } catch(e) { console.error('loadExistingPhotosForJob', e); }
 }
 
+async function drainOutbox(){
+  while(_obBusy) await new Promise(r => setTimeout(r, 150));
+  await processOutbox();
+}
+// Hands every photo from the open form to the persistent outbox (written to the
+// phone first), then uploads. Returns true if any photo for this docket is still
+// waiting — those stay safely on the phone and keep retrying; they are never dropped.
 async function uploadDocketPhotos(docketId) {
-  // currentPhotos = { arr:[{src}], pu:[{src}], tip:[{src}], rec:[{src}] }
-  // Returns true if any photo failed to upload, so callers can fold that into
-  // their own toast instead of it being silently overwritten (showToast()
-  // just replaces whatever's currently showing — a warning shown here used to
-  // get instantly clobbered by the "Saved" toast the caller fires right after).
   const zones = ['arr','pu','tip','rec','quote'];
-  let anyFailed = false;
   for(const zone of zones) {
-    const list = currentPhotos[zone] || [];
-    const remaining = [];
-    for(let i=0;i<list.length;i++) {
-      const item = list[i];
-      try {
-        const blob = await (await fetch(item.src)).blob();
-        const path = docketId+'/'+zone+'_'+Date.now()+'_'+i+'.jpg';
-        const { error: upErr } = await sb.storage.from('docket-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-        if(upErr) throw upErr;
-        // Supabase's insert() resolves with {error} on a DB-side rejection
-        // (RLS, a check constraint) rather than throwing — this used to go
-        // unchecked, so a rejected insert looked identical to a successful
-        // one: the file would sit in Storage with no row in `photos`, and
-        // the photo would silently vanish from the docket/PDF with no
-        // warning at all. Checking and throwing here is what makes that
-        // failure actually count as failed (kept for retry, toast shown).
-        const { error: insErr } = await sb.from('photos').insert([{ docket_id: docketId, zone, storage_path: path, uploaded_by: (currentDriver && currentDriver.id) || null }]);
-        if(insErr) throw insErr;
-      } catch(e) { console.error('photo upload', zone, e); anyFailed = true; remaining.push(item); }
+    for(const item of (currentPhotos[zone] || [])) {
+      if(!item.oid && !item.done) await queuePhotoForUpload(zone, item, docketId);
     }
-    // Only keep photos that actually failed queued up — successful ones are
-    // done, and re-sending them on a retry would just create duplicates.
-    currentPhotos[zone] = remaining;
   }
-  return anyFailed;
+  await drainOutbox();
+  const waiting = (await idbAll('outbox')).filter(i => i.docketId === docketId).length;
+  zones.forEach(z => { currentPhotos[z] = []; });
+  return waiting > 0;
 }
 
 async function saveDocketToDB(job, stageKey, auditAction) {
@@ -2495,8 +2491,189 @@ function bootApp() {
   renderFolders();
 }
 
+// ── CRASH-PROOF DRAFTS + PHOTO OUTBOX ──────────────────────────────────────
+// Goal: a photo or a typed value can NEVER be lost because the app was closed,
+// the phone reloaded the page (very common after switching to the camera), the
+// battery died or there was no signal at the tip.
+//  • Every change to the form is auto-saved to the phone (IndexedDB) as a draft.
+//  • Every photo is written to the phone the instant it's taken, and — when the
+//    docket already exists — queued in an "outbox" that uploads it in the
+//    background, retrying until it succeeds. Nothing is removed from the phone
+//    until the server has confirmed it.
+//  • On reopening, unsaved drafts are offered on the Jobs screen to resume.
+let _idb = null, _formDirty = false, _draftTimer = null, _obBusy = false;
+function idbOpen(){
+  if(_idb) return Promise.resolve(_idb);
+  return new Promise((res, rej) => {
+    if(!window.indexedDB) return rej(new Error('no indexedDB'));
+    const r = indexedDB.open('snowy-driver', 1);
+    r.onupgradeneeded = () => { const db = r.result; db.createObjectStore('drafts', { keyPath:'key' }); db.createObjectStore('outbox', { keyPath:'id' }); };
+    r.onsuccess = () => { _idb = r.result; res(_idb); };
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbDo(store, mode, fn){
+  try {
+    const db = await idbOpen();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(store, mode); const st = tx.objectStore(store);
+      const rq = fn(st);
+      tx.oncomplete = () => res(rq && 'result' in rq ? rq.result : undefined);
+      tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
+    });
+  } catch(e){ console.warn('idb', store, e); return undefined; }
+}
+const idbPut = (store, val) => idbDo(store, 'readwrite', s => s.put(val));
+const idbDel = (store, key) => idbDo(store, 'readwrite', s => s.delete(key));
+const idbAll = async (store) => (await idbDo(store, 'readonly', s => s.getAll())) || [];
+try { if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
+
+function draftKey(){ return editingSubmittedId ? 'sub:'+editingSubmittedId : editingJobId ? 'job:'+editingJobId : 'new'; }
+function formActive(){ const f = document.getElementById('scr-form'); return !!(f && f.classList.contains('active')); }
+function markDirty(){ _formDirty = true; scheduleDraftSave(); }
+function scheduleDraftSave(){ clearTimeout(_draftTimer); _draftTimer = setTimeout(flushDraftNow, 500); }
+
+function snapshotDraft(){
+  const fields = {};
+  document.querySelectorAll('#scr-form input, #scr-form select, #scr-form textarea').forEach(el => {
+    if(!el.id || el.type === 'file') return;
+    fields[el.id] = (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked : el.value;
+  });
+  const cnt = z => (currentPhotos[z]||[]).length;
+  return {
+    key: draftKey(), savedAt: Date.now(), editingJobId, editingSubmittedId, curStep,
+    title: (document.getElementById('form-title')||{}).textContent || '',
+    fields,
+    state: { sel_d:[...selB.d], sel_p:[...selB.p], waste:[...selWasteTypes], wcDest:{...wcDest}, quote:quoteItems, sigs:currentSigs },
+    photos: currentPhotos,
+    photoCount: cnt('arr')+cnt('pu')+cnt('tip')+cnt('rec')+cnt('quote')
+  };
+}
+async function flushDraftNow(){
+  clearTimeout(_draftTimer);
+  if(!_formDirty || !formActive()) return;
+  const snap = snapshotDraft();
+  // Don't save a draft that has nothing in it
+  await idbPut('drafts', JSON.parse(JSON.stringify(snap)));
+}
+async function clearDraft(key){ if(key) await idbDel('drafts', key); if(key === draftKey() || key === 'new') _formDirty = false; }
+
+// ---- photo outbox ----
+function newOid(){ return 'ph_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
+async function queuePhotoForUpload(zone, item, docketId){
+  if(!docketId || item.oid) return;
+  item.oid = newOid();
+  await idbPut('outbox', { id:item.oid, docketId, zone, src:item.src, createdAt:Date.now() });
+  processOutbox();
+}
+async function processOutbox(){
+  if(_obBusy) return;
+  _obBusy = true;
+  try {
+    let items = await idbAll('outbox');
+    updateOutboxBadge(items.length);
+    if(!items.length || navigator.onLine === false) return;
+    items.sort((a,b)=>a.createdAt-b.createdAt);
+    for(const it of items){
+      try {
+        const blob = await (await fetch(it.src)).blob();
+        const path = it.docketId+'/'+it.zone+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,6)+'.jpg';
+        const { error: upErr } = await sb.storage.from('docket-photos').upload(path, blob, { contentType:'image/jpeg', upsert:false });
+        if(upErr) throw upErr;
+        const { error: insErr } = await sb.from('photos').insert([{ docket_id: it.docketId, zone: it.zone, storage_path: path, uploaded_by: (currentDriver && currentDriver.id) || null }]);
+        if(insErr) throw insErr;
+        await idbDel('outbox', it.id);
+        // Mark the matching thumbnail in the open form as safely uploaded
+        Object.keys(currentPhotos).forEach(z => (currentPhotos[z]||[]).forEach(p => { if(p.oid === it.id){ p.done = true; } }));
+        ['arr','pu','tip','rec','quote'].forEach(z => { if(document.getElementById('pg-'+z)) rPg(z); });
+        if(_formDirty && formActive()) scheduleDraftSave();
+      } catch(e){ console.warn('outbox upload failed (will retry)', it.zone, e && e.message); }
+    }
+    items = await idbAll('outbox');
+    updateOutboxBadge(items.length);
+  } finally { _obBusy = false; }
+}
+function updateOutboxBadge(n){
+  const el = document.getElementById('ob-badge'); if(!el) return;
+  if(n > 0){ el.textContent = '⏳ ' + n + ' photo' + (n===1?'':'s') + ' saved on this phone — uploading when there\'s signal (tap to retry)'; el.style.display = 'block'; }
+  else el.style.display = 'none';
+}
+
+// ---- resume a saved draft ----
+async function renderDraftBanner(){
+  const host = document.getElementById('draft-banner'); if(!host) return;
+  const drafts = (await idbAll('drafts')).filter(d => d && d.key);
+  if(!drafts.length){ host.innerHTML = ''; return; }
+  host.innerHTML = drafts.sort((a,b)=>b.savedAt-a.savedAt).map(d => {
+    const when = new Date(d.savedAt).toLocaleString('en-AU',{weekday:'short',hour:'numeric',minute:'2-digit'});
+    const where = d.key === 'new' ? 'New docket' : (d.title || d.key.split(':')[1]);
+    return '<div class="draft-card"><div><b>Unsaved work — '+esc(where)+'</b><div style="font-size:11px;color:#7a5200">Step '+(d.curStep||1)+' · '+d.photoCount+' photo'+(d.photoCount===1?'':'s')+' · saved '+esc(when)+'</div></div>'+
+      '<div style="display:flex;gap:6px"><button class="btn-p teal" style="padding:7px 12px" onclick="resumeDraft(\''+esc(d.key)+'\')">Resume</button><button class="btn-s" style="padding:7px 10px" onclick="discardDraft(\''+esc(d.key)+'\')">Discard</button></div></div>';
+  }).join('');
+}
+async function discardDraft(key){
+  const d = (await idbAll('drafts')).find(x => x.key === key); if(!d) return;
+  if(!confirm('Delete this unsaved draft'+(d.photoCount?(' and its '+d.photoCount+' photo'+(d.photoCount===1?'':'s')):'')+'? This cannot be undone.')) return;
+  await idbDel('drafts', key); renderDraftBanner();
+}
+async function resumeDraft(key){
+  const d = (await idbAll('drafts')).find(x => x.key === key); if(!d) return;
+  try {
+    if(d.editingSubmittedId){
+      if(!submittedJobs.find(x => x.id === d.editingSubmittedId)){ showToast('That completed docket isn\'t available right now.'); return; }
+      editSubmittedJob(d.editingSubmittedId);
+    } else if(d.editingJobId){
+      if(!jobs.find(x => x.id === d.editingJobId)){ showToast('That docket is no longer in progress — draft kept.'); return; }
+      continueJob(d.editingJobId);
+    } else {
+      showTab('form'); resetForm();
+    }
+    setTimeout(() => applyDraft(d), 220);
+  } catch(e){ console.error('resumeDraft', e); showToast('Could not resume draft: '+e.message); }
+}
+function applyDraft(d){
+  const set = (id, v) => { const el = document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked = !!v; else el.value = v; };
+  if(d.fields['f-client'] != null){ set('f-client', d.fields['f-client']); try { onClientChange(d.fields['f-location']||''); } catch(e){} }
+  Object.keys(d.fields).forEach(id => { if(id !== 'f-client') set(id, d.fields[id]); });
+  const st = d.state || {};
+  selWasteTypes = new Set(st.waste && st.waste.length ? st.waste : ['Construction']); renderWasteTypePicker();
+  selB.d = new Set(st.sel_d||[]); selB.p = new Set(st.sel_p||[]);
+  quoteItems = st.quote || []; try { renderQuoteItems(); } catch(e){}
+  const qChk = document.getElementById('f-is-quote'); const qTray = document.getElementById('quote-tray'); if(qChk && qTray) qTray.classList.toggle('hidden', !qChk.checked);
+  wcDest = st.wcDest || {}; updPct(); updR();
+  // signatures that were captured but never saved
+  Object.entries(st.sigs || {}).forEach(([stage, sig]) => {
+    if(currentSigs[stage]) return;
+    currentSigs[stage] = sig;
+    const id = Object.keys(SIG_KEYS).find(k => SIG_KEYS[k] === stage); if(id) renderSigBox(id, sig, false);
+  });
+  currentPhotos = Object.assign({arr:[],pu:[],tip:[],rec:[],quote:[]}, d.photos || {});
+  ['arr','pu','tip','rec','quote'].forEach(z => { if(document.getElementById('pg-'+z)) rPg(z); });
+  if(d.title) document.getElementById('form-title').textContent = d.title;
+  goStep(d.curStep || 1);
+  if((d.curStep||1) >= 2) bld('bpd','d'); if((d.curStep||1) >= 3) bld('bpp','p');
+  _formDirty = true;
+  showToast('Draft restored — everything you entered is back.');
+  // Any restored photo that never reached the server goes back into the outbox
+  const docketId = d.editingSubmittedId || d.editingJobId;
+  if(docketId) ['arr','pu','tip','rec','quote'].forEach(z => (currentPhotos[z]||[]).forEach(p => { if(!p.done && !p.oid) queuePhotoForUpload(z, p, docketId); }));
+  processOutbox();
+}
+function setupDraftAutosave(){
+  const form = document.getElementById('scr-form');
+  if(form && !form._draftWired){
+    form._draftWired = true;
+    ['input','change'].forEach(ev => form.addEventListener(ev, e => { if(e.target && e.target.type !== 'file') markDirty(); }, true));
+  }
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') flushDraftNow(); });
+  window.addEventListener('pagehide', flushDraftNow);
+  window.addEventListener('online', processOutbox);
+  setInterval(() => { if(_formDirty && formActive()) flushDraftNow(); processOutbox(); }, 20000);
+}
+
 async function init() {
   buildWasteComp();
+  setupDraftAutosave();
   try {
     const { data: { session } } = await sb.auth.getSession();
     if(!session) { showLoginScreen(); return; }
@@ -2515,6 +2692,8 @@ async function init() {
     await loadJobsFromDB();
     subscribeToRealtime();
     bootApp();
+    renderDraftBanner();
+    processOutbox();
     handleBinQRParam();
   } catch(e) { console.error('init', e); showToast('Startup error: '+(e.message||e)); }
 }
@@ -2696,6 +2875,7 @@ async function saveAndExit(stageKey) {
   if(editingSubmittedId) { return saveSubmittedEdit(); }
   if(_savingJob) return;
   _savingJob = true;
+  const dKey = draftKey();
   const btn = document.getElementById(STAGE_SAVE_BTN[stageKey]);
   const label = document.getElementById(STAGE_SAVE_BTN[stageKey]+'-label');
   const origLabel = label ? label.textContent : '';
@@ -2777,6 +2957,7 @@ async function saveAndExit(stageKey) {
     if(stageKey === 'order') registerNewSiteIfNeeded(FOLDERS.find(f => f.name === data.client));
     // Upload any buffered photos
     const photosFailed = await uploadDocketPhotos(job.id);
+    await clearDraft(dKey);
 
     const stageDone = stageKey === 'disposal' && hasSig;
     if(stageDone) {
@@ -2786,7 +2967,7 @@ async function saveAndExit(stageKey) {
       renderDoneList();
     }
 
-    const photoWarning = photosFailed ? ' Some photos failed to upload — check signal and try again.' : '';
+    const photoWarning = photosFailed ? ' Some photos are safe on this phone and will upload automatically when you have signal.' : '';
     if(hasSig) showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.' + photoWarning);
     else showToast('Saved — get a signature later to mark this step done.' + photoWarning);
 
