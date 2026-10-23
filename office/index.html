@@ -2621,7 +2621,7 @@ async function loadPhotosForDocket(docketId){
       PHOTOS_CACHE[docketId] = list;
     }
     if(!list.length){ pane.innerHTML = `<div style="color:var(--mt);font-size:12px;padding:20px;text-align:center"><i class="ti ti-photo-off" style="font-size:30px;display:block;margin-bottom:6px;color:#ccc"></i>No photos uploaded for this docket</div>`; return; }
-    const zoneLabels = { arr:'Arrival / Delivery', pu:'Pickup', tip:'Disposal — Landfill / Tip', rec:'Disposal — Recycle' };
+    const zoneLabels = { arr:'Arrival / Delivery', pu:'Pickup', tip:'Disposal — Tipped waste', rec:'Disposal — Receipt (weighbridge / recycler)', quote:'Quote photos' };
     const grouped = {};
     list.forEach(p => { (grouped[p.zone] = grouped[p.zone] || []).push(p); });
     pane.innerHTML = Object.entries(grouped).map(([zone, items]) => `
@@ -3309,7 +3309,7 @@ async function generateProjectReportPDF(btnEl){
       try { const r = await sb.from('nonconformances').select('docket_id,status').in('docket_id', ids); ncRows = r.data || []; } catch(e){ console.warn('report nc', e); }
       const weighed = rows.filter(d => parseFloat(d.weight) > 0);
       const N = weighed.length;
-      const receiptPhoto = new Set(photoRows.filter(p => p.zone === 'rec' || p.zone === 'tip').map(p => p.docket_id));
+      const receiptPhoto = new Set(photoRows.filter(p => p.zone === 'rec').map(p => p.docket_id));
       const withReceiptPhoto = weighed.filter(d => receiptPhoto.has(d.id)).length;
       const withValue = weighed.filter(d => d.receipt_ex_gst != null).length;
       const withComp = weighed.filter(d => d.waste_pcts && Object.keys(d.waste_pcts).length).length;
@@ -3330,7 +3330,7 @@ async function generateProjectReportPDF(btnEl){
         margin: { left: M, right: M },
         head: [['Compliance item','Status']],
         body: [
-          ['Disposal receipt / tip photos on file', ofN(withReceiptPhoto) + ' bin services'],
+          ['Disposal receipt photo on file', ofN(withReceiptPhoto) + ' bin services'],
           ['Receipt value (ex GST) recorded', ofN(withValue) + ' bin services'],
           ['Waste composition recorded', ofN(withComp) + ' bin services'],
           ['Recycled / reused / landfill destination recorded', ofN(withDest) + ' bin services'],
@@ -4328,27 +4328,48 @@ async function generateDocketPDF(docketId, copyType){
       cursorY = boxY + boxH + 13;
     }
 
+    // Photos are drawn large and at their true proportions (no cropping / stretching):
+    // two per row, except the disposal receipt which is shown full width so the
+    // weighbridge figures can actually be read.
     async function drawPhotoStrip(zone, label){
       const pd = photoData[zone];
       if(!pd || !pd.items.length) return;
-      ensureSpace(40);
+      const full = (zone === 'rec');
+      const gap = 5;
+      const colW = full ? (PW - 2*M) : (PW - 2*M - gap) / 2;
+      const maxH = full ? 120 : 85;
+      const perRow = full ? 1 : 2;
+      const sizes = await Promise.all(pd.items.map(u => _imgSize(u)));
+      const firstH = Math.min(maxH, colW * ((sizes[0].h||3)/(sizes[0].w||4)));
+      ensureSpace(10 + firstH);
       if(label){
-        doc.setTextColor.apply(doc, GREY);
-        doc.setFont('helvetica','normal'); doc.setFontSize(9);
+        doc.setTextColor.apply(doc, DARK);
+        doc.setFont('helvetica','bold'); doc.setFontSize(10);
         doc.text(label, M, cursorY + 3);
-        cursorY += 5;
+        cursorY += 7;
       }
-      const tileW = 36, tileH = 28, gap = 3;
-      let x = M;
-      pd.items.forEach(src => {
-        if(x + tileW > PW - M){ x = M; cursorY += tileH + gap; ensureSpace(tileH + gap); }
-        try { doc.addImage(src, 'JPEG', x, cursorY, tileW, tileH); }
-        catch(e){ try { doc.addImage(src, 'PNG', x, cursorY, tileW, tileH); } catch(e2){} }
-        doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.2);
-        doc.rect(x, cursorY, tileW, tileH);
-        x += tileW + gap;
-      });
-      cursorY += tileH + 3;
+      for(let i = 0; i < pd.items.length; i += perRow){
+        const idxs = []; for(let j = i; j < Math.min(i + perRow, pd.items.length); j++) idxs.push(j);
+        let rowH = 0;
+        const dims = idxs.map(j => {
+          const ratio = (sizes[j].h || 3) / (sizes[j].w || 4);
+          let w = colW, h = w * ratio;
+          if(h > maxH){ h = maxH; w = h / ratio; }
+          rowH = Math.max(rowH, h);
+          return { w, h };
+        });
+        ensureSpace(rowH + gap);
+        idxs.forEach((j, k) => {
+          const x = M + k * (colW + gap);
+          const src = pd.items[j];
+          try { doc.addImage(src, 'JPEG', x, cursorY, dims[k].w, dims[k].h); }
+          catch(e){ try { doc.addImage(src, 'PNG', x, cursorY, dims[k].w, dims[k].h); } catch(e2){} }
+          doc.setDrawColor.apply(doc, LIGHT); doc.setLineWidth(0.2);
+          doc.rect(x, cursorY, dims[k].w, dims[k].h);
+        });
+        cursorY += rowH + gap;
+      }
+      cursorY += 2;
       if(pd.extra > 0){
         doc.setTextColor.apply(doc, GREY); doc.setFont('helvetica','italic'); doc.setFontSize(8);
         doc.text('+ ' + pd.extra + ' more photo(s) in office records', M, cursorY + 3);
@@ -4566,10 +4587,10 @@ async function generateDocketPDF(docketId, copyType){
     drawSectionTitle('Photos');
     const totalPhotos = photos.length;
     if(totalPhotos > 0){
-      await drawPhotoStrip('arr', 'Waste Image at Arrival');
+      await drawPhotoStrip('arr', 'Waste Image at Arrival (Delivery)');
       await drawPhotoStrip('pu', 'Waste Pickup (Loaded)');
-      await drawPhotoStrip('tip', 'Disposal Facility Receipt / Tip Photos');
-      await drawPhotoStrip('rec', 'Recycling Photos');
+      await drawPhotoStrip('tip', 'Disposal — Tipped Waste at Facility');
+      await drawPhotoStrip('rec', 'Disposal — Receipt (Weighbridge / Recycler)');
     } else {
       doc.setTextColor.apply(doc, GREY);
       doc.setFont('helvetica','italic'); doc.setFontSize(9);
