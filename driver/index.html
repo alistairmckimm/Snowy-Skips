@@ -585,34 +585,30 @@ canvas{display:none}
           <div class="venm-alert hidden" id="wc-haz" style="background:#fdecea;border-left-color:#E24B4A;color:#7a1f1f"><i class="ti ti-alert-octagon"></i> Contaminated / suspect material flagged — do not tip as clean fill. Add a photo and a note in comments so the office can follow up.</div>
         </div>
         <div class="sc">
-          <div class="stitle"><i class="ti ti-camera"></i>Disposal photos
-            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Both required · Auto-stamped</span>
+          <div class="stitle"><i class="ti ti-truck-unloading"></i>Tipped waste photos
+            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Add as many as needed · Auto-stamped</span>
           </div>
-          <div class="photo-pair">
-            <div class="pslot" id="slot-tip">
-              <div class="pslot-lbl"><i class="ti ti-truck-unloading"></i>Tipped waste</div>
-              <div class="pph" id="pp-tip"><i class="ti ti-photo-plus"></i><p>Unloaded waste at facility</p>
-                <div class="pslot-btns">
-                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-tip-cam').click()" title="Take photo"><i class="ti ti-camera"></i></button>
-                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-tip-gal').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button>
-                </div>
-              </div>
-            </div>
-            <input type="file" id="ph-tip-cam" accept="image/*" capture="environment" onchange="hsp('tip',this)">
-            <input type="file" id="ph-tip-gal" accept="image/*" onchange="hsp('tip',this)">
-            <div class="pslot" id="slot-rec">
-              <div class="pslot-lbl"><i class="ti ti-receipt"></i>Receipt</div>
-              <div class="pph" id="pp-rec"><i class="ti ti-photo-plus"></i><p>Weighbridge docket</p>
-                <div class="pslot-btns">
-                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-rec-cam').click()" title="Take photo"><i class="ti ti-camera"></i></button>
-                  <button type="button" class="pslot-btn" onclick="document.getElementById('ph-rec-gal').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button>
-                </div>
-              </div>
-            </div>
-            <input type="file" id="ph-rec-cam" accept="image/*" capture="environment" onchange="hsp('rec',this)">
-            <input type="file" id="ph-rec-gal" accept="image/*" onchange="hsp('rec',this)">
+          <div class="pzone-row">
+            <label class="pzone" for="ph-tip-cam"><i class="ti ti-camera"></i><p>Take photo</p></label>
+            <label class="pzone" for="ph-tip-gal"><i class="ti ti-photo"></i><p>Choose from gallery<br><span style="font-size:9px">(select several at once)</span></p></label>
           </div>
-          <div id="pg-dis-existing"></div>
+          <input type="file" id="ph-tip-cam" accept="image/*" capture="environment" multiple onchange="addPhotos('tip',this)">
+          <input type="file" id="ph-tip-gal" accept="image/*" multiple onchange="addPhotos('tip',this)">
+          <div class="pgrid" id="pg-tip"></div>
+          <div id="pg-tip-existing"></div>
+        </div>
+        <div class="sc">
+          <div class="stitle"><i class="ti ti-receipt"></i>Receipt / weighbridge docket photos
+            <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Add as many as needed · Auto-stamped</span>
+          </div>
+          <div class="pzone-row">
+            <label class="pzone" for="ph-rec-cam"><i class="ti ti-camera"></i><p>Take photo</p></label>
+            <label class="pzone" for="ph-rec-gal"><i class="ti ti-photo"></i><p>Choose from gallery<br><span style="font-size:9px">(select several at once)</span></p></label>
+          </div>
+          <input type="file" id="ph-rec-cam" accept="image/*" capture="environment" multiple onchange="addPhotos('rec',this)">
+          <input type="file" id="ph-rec-gal" accept="image/*" multiple onchange="addPhotos('rec',this)">
+          <div class="pgrid" id="pg-rec"></div>
+          <div id="pg-rec-existing"></div>
         </div>
         <div class="sc">
           <div class="stitle"><i class="ti ti-writing"></i>Sign disposal</div>
@@ -819,7 +815,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-10-21.1';
+const APP_BUILD = 'build 2026-10-23.2';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -1708,7 +1704,48 @@ function clearSig(id) {
 // ── PHOTOS ─────────────────────────────────────────────────────────────────
 function fmtStamp(){const n=new Date();const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];let h=n.getHours(),m=n.getMinutes();const a=h>=12?'PM':'AM';h=h%12||12;return n.getDate()+' '+M[n.getMonth()]+' '+n.getFullYear()+'  '+h+':'+(m<10?'0'+m:m)+' '+a+' UTC+10:00';}
 
-function stImg(src,cb){
+// ── PHOTO STAMP ────────────────────────────────────────────────────────────
+// The stamp shows when the photo was actually TAKEN, not when it was uploaded:
+// 1) EXIF DateTimeOriginal from the file, 2) the file's last-modified time
+// (a camera shot is created at capture time), 3) now as a last resort.
+function fmtStampAt(n){
+  const D=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h=n.getHours();const m=String(n.getMinutes()).padStart(2,'0');const a=h>=12?'PM':'AM';h=h%12||12;
+  return D[n.getDay()]+' '+n.getDate()+' '+M[n.getMonth()]+' '+n.getFullYear()+', '+h+':'+m+' '+a;
+}
+function _saneDate(d){ return d instanceof Date && !isNaN(d) && d.getFullYear()>=2015 && d.getTime() <= Date.now()+86400000; }
+async function exifDate(file){
+  try{
+    const v=new DataView(await file.slice(0,262144).arrayBuffer());
+    if(v.getUint16(0)!==0xFFD8) return null;
+    let off=2;
+    while(off+4<v.byteLength){
+      const marker=v.getUint16(off); if((marker&0xFF00)!==0xFF00) return null;
+      const len=v.getUint16(off+2);
+      if(marker===0xFFE1 && v.getUint32(off+4)===0x45786966){
+        const t=off+10, le=v.getUint16(t)===0x4949;
+        const g16=o=>v.getUint16(t+o,le), g32=o=>v.getUint32(t+o,le);
+        const ascii=(e)=>{ const c=g32(e+4); const loc=c>4?g32(e+8):e+8; let s=''; for(let i=0;i<c-1;i++) s+=String.fromCharCode(v.getUint8(t+loc+i)); return s; };
+        const readIfd=(o)=>{ const out={}; const n=g16(o); for(let i=0;i<n;i++){ const e=o+2+i*12; out[g16(e)]={e, type:g16(e+2)}; } return out; };
+        const ifd0=readIfd(g32(4));
+        let str=null;
+        if(ifd0[0x8769]){ const ex=readIfd(g32(ifd0[0x8769].e+8)); if(ex[0x9003]) str=ascii(ex[0x9003].e); else if(ex[0x9004]) str=ascii(ex[0x9004].e); }
+        if(!str && ifd0[0x0132]) str=ascii(ifd0[0x0132].e);
+        const m=str && str.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+        return m ? new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]) : null;
+      }
+      off+=2+len;
+    }
+  }catch(e){}
+  return null;
+}
+async function photoTakenAt(file){
+  const ex=await exifDate(file); if(_saneDate(ex)) return ex;
+  const lm=file && file.lastModified ? new Date(file.lastModified) : null; if(_saneDate(lm)) return lm;
+  return new Date();
+}
+
+function stImg(src,cb,takenAt){
   const i=new Image();
   i.onload=function(){
     try {
@@ -1719,7 +1756,7 @@ function stImg(src,cb){
       // photo" shots to vanish while a "Choose from gallery" pick (usually
       // already downsized by the OS) worked fine. Capping here also makes
       // uploads much faster on mobile data.
-      const MAX_DIM = 1600;
+      const MAX_DIM = 2000;
       const nw = i.naturalWidth||800, nh = i.naturalHeight||600;
       const scale = Math.min(1, MAX_DIM / Math.max(nw, nh));
       const W = Math.max(1, Math.round(nw*scale)), H = Math.max(1, Math.round(nh*scale));
@@ -1727,13 +1764,22 @@ function stImg(src,cb){
       c.width=W;c.height=H;
       const x=c.getContext('2d');
       x.drawImage(i,0,0,W,H);
-      const bH=Math.round(H*0.12),p=Math.round(W*0.02);
-      x.fillStyle='rgba(0,0,0,0.62)';x.fillRect(0,H-bH,W,bH);
-      const f1=Math.max(11,Math.round(bH*0.32)),f2=Math.max(10,Math.round(bH*0.27));
-      x.fillStyle='#f5c842';x.font='bold '+f1+'px monospace';x.fillText(fmtStamp(),p,H-bH+Math.round(bH*0.38));
-      x.font=f2+'px monospace';x.fillText('McKimm Civil Pty Ltd',p,H-bH+Math.round(bH*0.66));
-      x.fillStyle='rgba(255,255,255,0.8)';x.font=f2+'px monospace';x.fillText('Snowy Skips',p,H-bH+Math.round(bH*0.92));
-      const out = c.toDataURL('image/jpeg',0.88);
+      // Small stamp chip in the TOP-LEFT corner. The phone's own camera timestamp
+      // usually sits along the bottom (often bottom-right), so the bottom of the
+      // photo is deliberately left completely clear.
+      const fs=Math.max(12,Math.round(Math.max(W,H)*0.016));
+      const pad=Math.round(fs*0.55), mg=Math.round(fs*0.7);
+      const l1=fmtStampAt(takenAt instanceof Date && !isNaN(takenAt) ? takenAt : new Date());
+      const l2='McKimm Civil Pty Ltd · Snowy Skips';
+      x.font='bold '+fs+'px monospace'; const w1=x.measureText(l1).width;
+      const fs2=Math.round(fs*0.8); x.font=fs2+'px monospace'; const w2=x.measureText(l2).width;
+      const bw=Math.round(Math.max(w1,w2)+pad*2), bh=Math.round(fs+fs2+pad*2.2), r=Math.round(fs*0.4);
+      x.fillStyle='rgba(0,0,0,0.5)';
+      x.beginPath();x.moveTo(mg+r,mg);x.lineTo(mg+bw-r,mg);x.quadraticCurveTo(mg+bw,mg,mg+bw,mg+r);x.lineTo(mg+bw,mg+bh-r);x.quadraticCurveTo(mg+bw,mg+bh,mg+bw-r,mg+bh);x.lineTo(mg+r,mg+bh);x.quadraticCurveTo(mg,mg+bh,mg,mg+bh-r);x.lineTo(mg,mg+r);x.quadraticCurveTo(mg,mg,mg+r,mg);x.closePath();x.fill();
+      x.textBaseline='alphabetic';
+      x.fillStyle='#f5c842';x.font='bold '+fs+'px monospace';x.fillText(l1,mg+pad,mg+pad+fs*0.82);
+      x.fillStyle='rgba(255,255,255,0.85)';x.font=fs2+'px monospace';x.fillText(l2,mg+pad,mg+pad+fs+fs2*0.95+pad*0.2);
+      const out = c.toDataURL('image/jpeg',0.9);
       // A canvas failure (size limit, memory pressure) can still return a
       // tiny/garbage data URL without throwing — fall back to the original
       // photo rather than silently losing it.
@@ -1747,10 +1793,10 @@ function stImg(src,cb){
   i.src=src;
 }
 
-function addPhotos(zone,input){Array.from(input.files).forEach(f=>{const r=new FileReader();r.onload=e=>{stImg(e.target.result,s=>{currentPhotos[zone].push({src:s});rPg(zone);});};r.readAsDataURL(f);});input.value='';}
+function addPhotos(zone,input){Array.from(input.files).forEach(f=>{const r=new FileReader();r.onload=async e=>{const t=await photoTakenAt(f);stImg(e.target.result,s=>{currentPhotos[zone].push({src:s});rPg(zone);},t);};r.readAsDataURL(f);});input.value='';}
 function rPg(zone){const g=document.getElementById('pg-'+zone);if(!g)return;g.innerHTML=currentPhotos[zone].map((p,i)=>'<div class="pthumb"><img src="'+p.src+'"><button class="rm" onclick="rmP(\''+zone+'\','+i+')"><i class="ti ti-x"></i></button></div>').join('');}
 function rmP(z,i){currentPhotos[z].splice(i,1);rPg(z);}
-function hsp(zone,input){const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{stImg(e.target.result,s=>{currentPhotos[zone]=[{src:s}];const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);sl.classList.add('has-photo');pp.className='ppreview';pp.innerHTML='<img src="'+s+'"><div class="pstamp"><span>'+fmtStamp()+'</span><span>McKimm Civil Pty Ltd · Snowy Skips</span></div><button class="prm" onclick="rsp(event,\''+zone+'\')"><i class="ti ti-x"></i></button>';});};r.readAsDataURL(f);input.value='';}
+function hsp(zone,input){const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=async e=>{const t=await photoTakenAt(f);stImg(e.target.result,s=>{currentPhotos[zone]=[{src:s}];const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);sl.classList.add('has-photo');pp.className='ppreview';pp.innerHTML='<img src="'+s+'"><button class="prm" onclick="rsp(event,\''+zone+'\')"><i class="ti ti-x"></i></button>';},t);};r.readAsDataURL(f);input.value='';}
 function rsp(e,zone){currentPhotos[zone]=[];e.stopPropagation();const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);sl.classList.remove('has-photo');pp.className='pph';const lbl=zone==='tip'?'Unloaded waste at facility':'Weighbridge docket';pp.innerHTML='<i class="ti ti-photo-plus"></i><p>'+lbl+'</p><div class="pslot-btns"><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-cam\').click()" title="Take photo"><i class="ti ti-camera"></i></button><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-gal\').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button></div>';}
 
 // ── SUBMIT ─────────────────────────────────────────────────────────────────
@@ -1832,21 +1878,12 @@ function resetForm() {
   { const rc = document.getElementById('f-receipt'); if(rc) rc.value=''; }
   photos={arr:[],pu:[]};
   currentPhotos={arr:[],pu:[],tip:[],rec:[],quote:[]};
-  ['pg-arr','pg-pu','pg-quote','pg-arr-existing','pg-pu-existing','pg-dis-existing'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
+  ['pg-arr','pg-pu','pg-tip','pg-rec','pg-quote','pg-arr-existing','pg-pu-existing','pg-tip-existing','pg-rec-existing'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
   quoteItems = [];
   renderQuoteItems();
   const qNotes = document.getElementById('f-quote-notes'); if(qNotes) qNotes.value = '';
   const qChk = document.getElementById('f-is-quote'); if(qChk) qChk.checked = false;
   const qTray = document.getElementById('quote-tray'); if(qTray) qTray.classList.add('hidden');
-  ['tip','rec'].forEach(zone=>{
-    const sl=document.getElementById('slot-'+zone),pp=document.getElementById('pp-'+zone);
-    if(sl)sl.classList.remove('has-photo');
-    if(pp){
-      pp.className='pph';
-      const lbl=zone==='tip'?'Unloaded waste at facility':'Weighbridge docket';
-      pp.innerHTML='<i class="ti ti-photo-plus"></i><p>'+lbl+'</p><div class="pslot-btns"><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-cam\').click()" title="Take photo"><i class="ti ti-camera"></i></button><button type="button" class="pslot-btn" onclick="document.getElementById(\'ph-'+zone+'-gal\').click()" title="Choose from gallery"><i class="ti ti-photo"></i></button></div>';
-    }
-  });
   currentSigs = {};
   unlockAllSteps();
   ['sig-del','sig-pu','sig-dis'].forEach(id=>renderSigBox(id, null, false));
@@ -2368,7 +2405,7 @@ async function generateDocketIdFromDB() {
 // docket always looked like "no photos", because nothing already uploaded
 // was ever shown again. These are display-only and are never re-uploaded.
 async function loadExistingPhotosForJob(jobId) {
-  const containers = ['pg-arr-existing','pg-pu-existing','pg-dis-existing'];
+  const containers = ['pg-arr-existing','pg-pu-existing','pg-tip-existing','pg-rec-existing'];
   containers.forEach(id => { const el = document.getElementById(id); if(el) el.innerHTML = ''; });
   if(!jobId) return;
   try {
@@ -2388,7 +2425,8 @@ async function loadExistingPhotosForJob(jobId) {
     };
     fill('pg-arr-existing', byZone.arr);
     fill('pg-pu-existing', byZone.pu);
-    fill('pg-dis-existing', [...(byZone.tip||[]), ...(byZone.rec||[])]);
+    fill('pg-tip-existing', byZone.tip);
+    fill('pg-rec-existing', byZone.rec);
   } catch(e) { console.error('loadExistingPhotosForJob', e); }
 }
 
