@@ -1861,6 +1861,13 @@ async function saveDetailsEdit(docketId){
     bins_picked_up: bins('dr-e-bins-pu')
   };
   if(!el('dr-e-receipt')) delete patch.receipt_ex_gst;
+  // Weights are in tonnes — anything over 5 t is almost certainly kilograms typed into the tonnes box.
+  if(patch.weight != null && patch.weight > 5){
+    if(confirm('You entered ' + patch.weight + ' tonnes, which is more than 5 tonnes.\n\nIs ' + patch.weight + ' actually KILOGRAMS?\n\nOK = yes, record ' + (patch.weight/1000).toFixed(3) + ' t\nCancel = no, ' + patch.weight + ' tonnes is correct')){
+      patch.weight = parseFloat((patch.weight / 1000).toFixed(3));
+      const we = el('dr-e-weight'); if(we) we.value = patch.weight;
+    }
+  }
   if(el('dr-comp-editor')){
     const cc = _compCollect();
     if(cc.error){ showToast(cc.error); return; }
