@@ -562,7 +562,7 @@ canvas{display:none}
           <div class="wb-block">
             <div style="font-size:9px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Net weight from weighbridge receipt</div>
             <div class="field" style="margin-bottom:6px"><label>Enter weight in tonnes</label>
-              <input type="number" id="fw" step="0.001" placeholder="e.g. 0.580" oninput="updR()">
+              <input type="number" id="fw" step="0.001" placeholder="e.g. 0.580" oninput="updR()" onchange="checkWeightUnits()">
             </div>
             <div class="wb-row">
               <div class="wb-card"><div class="wb-v" id="wt">—</div><div class="wb-u">Tonnes</div></div>
@@ -819,7 +819,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-10-23.3';
+const APP_BUILD = 'build 2026-10-23.4';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -1142,6 +1142,7 @@ async function saveSubmittedEdit() {
     if(navigator.onLine === false) { showToast('Offline — cannot save right now. Try again when you have signal.'); return; }
     const job = submittedJobs.find(x => x.id === editingSubmittedId);
     if(!job) { showToast('Could not find that docket to update.'); return; }
+    await checkWeightUnits();
     { const wcTot = wasteCompTotal();
       if(wcTot !== 0 && wcTot !== 100) { showInlineAlert(4, 'Waste breakdown must total 100% (currently '+wcTot+'%).'); return; }
       if(wcTot === 100 && wasteCompMissingDest().length) { showInlineAlert(4, 'Choose Recycled, Reused or Landfill for every material you entered.'); return; } }
@@ -1396,6 +1397,30 @@ function updPct() {
   }
   const va = document.getElementById('va'); if(va) va.classList.toggle('hidden', c.venm===0);
   const hz = document.getElementById('wc-haz'); if(hz) hz.classList.toggle('hidden', c.contaminated===0);
+}
+
+// Weights are entered in TONNES. A weighbridge docket is often read in kilograms
+// (e.g. 450 kg typed as "450"), which would record a 450-tonne load. Any weight over
+// 5 tonnes triggers a "did you mean kilograms?" question before it's accepted.
+let _wtAccepted = null;
+function checkWeightUnits(){
+  const el = document.getElementById('fw');
+  const v = parseFloat(el && el.value);
+  if(!(v > 5)){ _wtAccepted = null; return Promise.resolve(true); }
+  if(_wtAccepted === String(v)) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const kgAs = (v/1000).toFixed(3);
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:18px;max-width:360px;width:100%;font-family:inherit">'+
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px">Check the weight</div>'+
+      '<div style="font-size:14px;color:#333;line-height:1.4;margin-bottom:14px">You entered <b>'+v+' tonnes</b>. That is more than 5 tonnes — is <b>'+v+'</b> actually <b>kilograms</b>?</div>'+
+      '<button id="wt-kg" style="width:100%;padding:13px;border:none;border-radius:10px;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;margin-bottom:8px">Yes, it\'s '+v+' kg → record '+kgAs+' t</button>'+
+      '<button id="wt-t" style="width:100%;padding:13px;border:1px solid #ccc;border-radius:10px;background:#fff;color:#333;font-size:14px;font-weight:600">No, it really is '+v+' tonnes</button></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#wt-kg').onclick = () => { el.value = kgAs; _wtAccepted = null; ov.remove(); updR(); markDirty(); resolve(true); };
+    ov.querySelector('#wt-t').onclick = () => { _wtAccepted = String(v); ov.remove(); resolve(true); };
+  });
 }
 
 function updR() {
@@ -2900,6 +2925,7 @@ async function saveAndExit(stageKey) {
         if(!ooEl || !ooEl.value) { showInlineAlert(1, 'Enter the one-off client name.'); return; }
       }
     }
+    await checkWeightUnits();
     if(stageKey === 'disposal') {
       const wcTot = wasteCompTotal();
       if(wcTot > 100) { showInlineAlert(4, 'Waste breakdown adds up to '+wcTot+'% — it must not be more than 100%.'); return; }
