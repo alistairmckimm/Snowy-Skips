@@ -1790,6 +1790,7 @@ function renderDrawerDetails(d){
         ${fieldRow('Submitted at', fmtDT(d.submitted_at))}
       </div>
       ${ed ? '<div id="dr-comp-editor"></div>' : pctList}
+      ${Object.prototype.hasOwnProperty.call(d,'dis_comments') ? (ed ? edRow('Disposal comments', 'dr-e-dis-comments', d.dis_comments, {type:'textarea'}) : (d.dis_comments ? `<div class="dr-field" style="grid-column:1/-1"><label>Disposal comments (driver)</label><div class="v" style="white-space:pre-wrap">${esc(d.dis_comments)}</div></div>` : '')) : ''}
       ${hazFlag?'<div class="sm" style="color:#a32d2d;margin-top:6px"><i class="ti ti-alert-octagon"></i> Driver flagged contaminated / suspect material ('+esc(String(pcts.contaminated))+'%) — follow up before reporting.</div>':''}
     </div>
     <div class="dr-sect">
@@ -1861,6 +1862,7 @@ async function saveDetailsEdit(docketId){
     bins_picked_up: bins('dr-e-bins-pu')
   };
   if(!el('dr-e-receipt')) delete patch.receipt_ex_gst;
+  if(el('dr-e-dis-comments')) patch.dis_comments = txt('dr-e-dis-comments');
   // Weights are in tonnes — anything over 5 t is almost certainly kilograms typed into the tonnes box.
   if(patch.weight != null && patch.weight > 5){
     if(confirm('You entered ' + patch.weight + ' tonnes, which is more than 5 tonnes.\n\nIs ' + patch.weight + ' actually KILOGRAMS?\n\nOK = yes, record ' + (patch.weight/1000).toFixed(3) + ' t\nCancel = no, ' + patch.weight + ' tonnes is correct')){
@@ -4597,6 +4599,13 @@ async function generateDocketPDF(docketId, copyType){
       ],
       { colWidths: [26, 20, 46, 26, 28, 34] }
     );
+    if(docket.dis_comments && String(docket.dis_comments).trim()){
+      drawSubsection('Disposal Comments');
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, DARK);
+      const dcLines = doc.splitTextToSize(String(docket.dis_comments).trim(), PW - 2*M);
+      dcLines.forEach(line => { ensureSpace(6); doc.text(line, M, cursorY + 4); cursorY += 5; });
+      cursorY += 3;
+    }
     const pcts = docket.waste_pcts || {};
     const compRowsD = docketCompRows(docket);
     if(compRowsD.length){
