@@ -615,6 +615,10 @@ canvas{display:none}
           <div id="pg-rec-existing"></div>
         </div>
         <div class="sc">
+          <div class="stitle"><i class="ti ti-message-2"></i>Disposal comments <span style="margin-left:auto;font-size:9px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0">Optional</span></div>
+          <div class="field" style="margin-bottom:0"><textarea id="f-dis-comments" rows="3" placeholder="e.g. Tipped at the green waste area, waited 20 min at the weighbridge, one bag of asbestos-suspect material set aside"></textarea></div>
+        </div>
+        <div class="sc">
           <div class="stitle"><i class="ti ti-writing"></i>Sign disposal</div>
           <div class="sigbox" id="sig-dis" onclick="doSign('sig-dis')"><i class="ti ti-signature sico"></i><div class="sbt"><p>Tap to sign</p><small>Confirms waste disposed at facility</small></div></div>
         </div>
@@ -819,7 +823,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-10-23.4';
+const APP_BUILD = 'build 2026-11-03.1';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -872,7 +876,7 @@ function openFolder(folderId) {
   // Jobs filed away from the Submitted tab live here too, so a client's
   // completed history is browsable from their folder instead of piling up
   // in one long flat list.
-  const filedJobs = submittedJobs.filter(j=>j.folder===folderId && j.filed);
+  const filedJobs = submittedJobs.filter(j=>j.folder===folderId && j.filed).sort((a,b)=>disposalTs(b)-disposalTs(a));
   document.getElementById('client-subtitle').textContent = folderJobs.length + ' active job' + (folderJobs.length!==1?'s':'');
   renderClientJobs(folderJobs, filedJobs);
   document.getElementById('view-folders').style.display='none';
@@ -1001,6 +1005,7 @@ function continueJob(jobId) {
   if(selWasteTypes.size === 0) selWasteTypes.add('Construction');
   renderWasteTypePicker();
   document.getElementById('f-comments').value = j.comments||'';
+  { const dc = document.getElementById('f-dis-comments'); if(dc) dc.value = j.disComments||''; }
   quoteItems = (j.quoteItems || []).map(it => ({ desc: it.desc||'', qty: it.qty||1, price: it.price||0 }));
   const qNotesEl = document.getElementById('f-quote-notes'); if(qNotesEl) qNotesEl.value = j.quoteNotes || '';
   const qChkEl = document.getElementById('f-is-quote'); if(qChkEl) qChkEl.checked = !!j.isQuote;
@@ -1085,6 +1090,7 @@ function editSubmittedJob(jobId) {
   if(selWasteTypes.size === 0) selWasteTypes.add('Construction');
   renderWasteTypePicker();
   document.getElementById('f-comments').value = j.comments||'';
+  { const dc = document.getElementById('f-dis-comments'); if(dc) dc.value = j.disComments||''; }
   quoteItems = (j.quoteItems || []).map(it => ({ desc: it.desc||'', qty: it.qty||1, price: it.price||0 }));
   const qNotesEl = document.getElementById('f-quote-notes'); if(qNotesEl) qNotesEl.value = j.quoteNotes || '';
   const qChkEl = document.getElementById('f-is-quote'); if(qChkEl) qChkEl.checked = !!j.isQuote;
@@ -1859,11 +1865,31 @@ function submitForm() {
   editingJobId = null;
 }
 
+// Newest disposal first (disposal date + time; falls back to when it was submitted).
+function disposalTs(j){
+  if(j.disDate){ const t = new Date(j.disDate + 'T' + ((j.disTime||'00:00').slice(0,5)) + ':00'); if(!isNaN(t)) return t.getTime(); }
+  const f = new Date(j.submitted_at || j.updatedAt || 0); return isNaN(f) ? 0 : f.getTime();
+}
+function sortSubmitted(){ submittedJobs.sort((a,b) => disposalTs(b) - disposalTs(a)); }
+function dayHeading(ts){
+  if(!ts) return 'Date unknown';
+  const d = new Date(ts), now = new Date(), y = new Date(); y.setDate(now.getDate()-1);
+  const same = (a,b) => a.toDateString() === b.toDateString();
+  const lbl = d.toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return same(d,now) ? 'Today — '+lbl : same(d,y) ? 'Yesterday — '+lbl : lbl;
+}
 function renderDoneList() {
   const dl = document.getElementById('done-list');
+  sortSubmitted();
   const list = submittedJobs.filter(j => !j.filed);
   if(!list.length){ dl.innerHTML='<div style="text-align:center;padding:40px;color:#bbb"><i class="ti ti-inbox" style="font-size:36px;display:block;margin-bottom:8px"></i>No submitted dockets yet</div>'; return; }
-  dl.innerHTML = list.map(j => doneCard(j)).join('');
+  let lastDay = '';
+  dl.innerHTML = list.map(j => {
+    const day = dayHeading(disposalTs(j));
+    const head = day !== lastDay ? '<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin:14px 2px 8px">'+day+'</div>' : '';
+    lastDay = day;
+    return head + doneCard(j);
+  }).join('');
 }
 
 // Shared card for a completed job — used both in the flat Submitted tab and
@@ -1880,7 +1906,7 @@ function doneCard(j, opts) {
   }
   return `<div style="background:#fff;border:1px solid #e8e8e8;border-radius:14px;padding:13px;margin-bottom:10px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
-      <div><div style="font-size:15px;font-weight:700;color:#1a1a1a">${j.client}</div><div style="font-size:10px;color:#aaa">${j.id} · ${j.submitted||''}</div>${editedNote}</div>
+      <div><div style="font-size:15px;font-weight:700;color:#1a1a1a">${j.client}</div><div style="font-size:10px;color:#aaa">${j.id} · ${j.disDate ? 'Disposed ' + new Date(j.disDate+'T'+((j.disTime||'00:00').slice(0,5))+':00').toLocaleString('en-AU',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}) : (j.submitted||'')}</div>${editedNote}</div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
         <span style="background:#e1f5ee;color:#155724;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700">Submitted</span>
         ${editBtn}
@@ -1904,7 +1930,7 @@ async function fileJobToFolder(jobId) {
 
 function resetForm() {
   _formDirty = false;
-  ['f-client','f-location','f-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['f-client','f-location','f-comments','f-dis-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   updateSiteField(null, '');
   ['fw','fcbm'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   ['f-bintype','f-facility'].forEach(id=>{const e=document.getElementById(id);if(e)e.selectedIndex=0;});
@@ -2222,6 +2248,7 @@ function rowToJob(row) {
     binType: row.bin_type || '',
     wasteType: row.waste_type || '',
     comments: row.comments || '',
+    disComments: row.dis_comments || '',
     arrDate: row.arr_date || '',
     arrTime: row.arr_time || '',
     rego: row.rego || '',
@@ -2271,6 +2298,7 @@ function jobToRow(job, stageKey) {
     bin_type: job.binType || null,
     waste_type: job.wasteType || null,
     comments: job.comments || null,
+    dis_comments: job.disComments || null,
     arr_date: job.arrDate || null,
     arr_time: job.arrTime || null,
     rego: job.rego || null,
@@ -2493,10 +2521,10 @@ async function saveDocketToDB(job, stageKey, auditAction) {
     let { error } = await sb.from('dockets').upsert(rowData, { onConflict: 'id' });
     // If migration_011 hasn't been run yet the new columns don't exist — save without them
     // rather than lose the whole docket, and warn so the office runs the migration.
-    if(error && /waste_dest|receipt_ex_gst/.test(error.message || '')) {
-      const { waste_dest, receipt_ex_gst, ...legacyRow } = rowData;
+    if(error && /waste_dest|receipt_ex_gst|dis_comments/.test(error.message || '')) {
+      const { waste_dest, receipt_ex_gst, dis_comments, ...legacyRow } = rowData;
       ({ error } = await sb.from('dockets').upsert(legacyRow, { onConflict: 'id' }));
-      if(!error) showToast('Saved, but destinations & receipt $ were NOT stored — office must run database migration 011.');
+      if(!error) showToast('Saved, but some new fields (destinations / receipt $ / disposal comments) were NOT stored — office must run the latest database migrations.');
     }
     if(error) throw error;
     const action = auditAction || (stageKey === 'order' ? 'saved:order' : 'signed:'+stageKey);
@@ -2834,6 +2862,7 @@ function gatherFormData() {
     binType: document.getElementById('f-bintype').value || '',
     wasteType: [...selWasteTypes].join(', '),
     comments: document.getElementById('f-comments').value || '',
+    disComments: (document.getElementById('f-dis-comments')?.value || '').trim(),
     arrDate: document.getElementById('f-arr-date').value || '',
     arrTime: document.getElementById('f-arr-time').value || '',
     rego: document.getElementById('f-rego').value || '',
