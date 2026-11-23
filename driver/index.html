@@ -443,6 +443,22 @@ canvas{display:none}
             <div class="wt-grid" id="wt-grid"></div>
           </div>
           <div class="field"><label>Comments (optional)</label><textarea id="f-comments" placeholder="e.g. Via Tristan, access via side gate"></textarea></div>
+          <div class="field"><label>Site contact on the day <span style="font-weight:400;color:#aaa;text-transform:none">— name and phone</span></label><input type="text" id="f-site-contact" placeholder="e.g. Jim 0412 345 678"></div>
+          <div class="field"><label>Delivery window</label>
+            <select id="f-window">
+              <option value="">Any time</option><option>Early (before 8am)</option><option>Morning</option><option>Afternoon</option><option>Call before delivery</option><option>Specific time (see access notes)</option>
+            </select>
+          </div>
+          <div class="field"><label>Access and bin placement <span style="font-weight:400;color:#aaa;text-transform:none">— gate codes, wires, where the bin goes</span></label><textarea id="f-access" placeholder="e.g. Gate code 1234. Overhead wires on the left, bin goes on the right."></textarea></div>
+          <div class="field"><label>Attachments <span style="font-weight:400;color:#aaa;text-transform:none">— PDFs, plans and photos for the driver</span></label>
+            <div class="pzone-row">
+              <label class="pzone" for="att-cam"><i class="ti ti-camera"></i><p>Take photo</p></label>
+              <label class="pzone" for="att-file"><i class="ti ti-paperclip"></i><p>PDF, photo or file</p></label>
+            </div>
+            <input type="file" id="att-cam" accept="image/*" capture="environment" multiple onchange="attAddFiles('f',this)">
+            <input type="file" id="att-file" accept="image/*,application/pdf" multiple onchange="attAddFiles('f',this)">
+            <div id="att-list"></div>
+          </div>
         </div>
         <div class="sc">
           <label class="quote-toggle"><input type="checkbox" id="f-is-quote" onchange="toggleQuoteTray()"><span>This is a quotation — no bin booked yet</span></label>
@@ -823,7 +839,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-11-03.1';
+const APP_BUILD = 'build 2026-11-23.1';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -929,6 +945,7 @@ function jobCard(j) {
       <div class="job-tag"><i class="ti ti-trash"></i>${j.wasteType}</div>
       <div class="job-tag"><i class="ti ti-stack-2"></i>${binsLabel}</div>
     </div>
+    ${orderInfoHtml(j)}
     <div class="signoff-row">${signoffSummary(j)}</div>
     ${j.stage < 5 ? `<button class="job-next ${nextClass}" onclick="continueJob('${j.id}')">${nextLabel} <i class="ti ti-arrow-right"></i></button>` : '<div style="background:#e1f5ee;color:#155724;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:600"><i class="ti ti-circle-check"></i> Completed</div>'}
   </div>`;
@@ -1005,6 +1022,8 @@ function continueJob(jobId) {
   if(selWasteTypes.size === 0) selWasteTypes.add('Construction');
   renderWasteTypePicker();
   document.getElementById('f-comments').value = j.comments||'';
+  { const e1=document.getElementById('f-site-contact'); if(e1) e1.value=j.siteContact||''; const e2=document.getElementById('f-window'); if(e2) e2.value=j.deliveryWindow||''; const e3=document.getElementById('f-access'); if(e3) e3.value=j.accessNotes||''; }
+  attInit('f','att-list',j.attachments||[]);
   { const dc = document.getElementById('f-dis-comments'); if(dc) dc.value = j.disComments||''; }
   quoteItems = (j.quoteItems || []).map(it => ({ desc: it.desc||'', qty: it.qty||1, price: it.price||0 }));
   const qNotesEl = document.getElementById('f-quote-notes'); if(qNotesEl) qNotesEl.value = j.quoteNotes || '';
@@ -1090,6 +1109,8 @@ function editSubmittedJob(jobId) {
   if(selWasteTypes.size === 0) selWasteTypes.add('Construction');
   renderWasteTypePicker();
   document.getElementById('f-comments').value = j.comments||'';
+  { const e1=document.getElementById('f-site-contact'); if(e1) e1.value=j.siteContact||''; const e2=document.getElementById('f-window'); if(e2) e2.value=j.deliveryWindow||''; const e3=document.getElementById('f-access'); if(e3) e3.value=j.accessNotes||''; }
+  attInit('f','att-list',j.attachments||[]);
   { const dc = document.getElementById('f-dis-comments'); if(dc) dc.value = j.disComments||''; }
   quoteItems = (j.quoteItems || []).map(it => ({ desc: it.desc||'', qty: it.qty||1, price: it.price||0 }));
   const qNotesEl = document.getElementById('f-quote-notes'); if(qNotesEl) qNotesEl.value = j.quoteNotes || '';
@@ -1930,7 +1951,8 @@ async function fileJobToFolder(jobId) {
 
 function resetForm() {
   _formDirty = false;
-  ['f-client','f-location','f-comments','f-dis-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['f-client','f-location','f-comments','f-site-contact','f-access','f-window','f-dis-comments','f-rego','f-pu-rego'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  attInit('f','att-list',[]);
   updateSiteField(null, '');
   ['fw','fcbm'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   ['f-bintype','f-facility'].forEach(id=>{const e=document.getElementById(id);if(e)e.selectedIndex=0;});
@@ -2248,6 +2270,10 @@ function rowToJob(row) {
     binType: row.bin_type || '',
     wasteType: row.waste_type || '',
     comments: row.comments || '',
+    siteContact: row.site_contact || '',
+    deliveryWindow: row.delivery_window || '',
+    accessNotes: row.access_notes || '',
+    attachments: row.attachments || [],
     disComments: row.dis_comments || '',
     arrDate: row.arr_date || '',
     arrTime: row.arr_time || '',
@@ -2298,6 +2324,9 @@ function jobToRow(job, stageKey) {
     bin_type: job.binType || null,
     waste_type: job.wasteType || null,
     comments: job.comments || null,
+    site_contact: job.siteContact || null,
+    delivery_window: job.deliveryWindow || null,
+    access_notes: job.accessNotes || null,
     dis_comments: job.disComments || null,
     arr_date: job.arrDate || null,
     arr_time: job.arrTime || null,
@@ -2525,6 +2554,11 @@ async function saveDocketToDB(job, stageKey, auditAction) {
       const { waste_dest, receipt_ex_gst, dis_comments, ...legacyRow } = rowData;
       ({ error } = await sb.from('dockets').upsert(legacyRow, { onConflict: 'id' }));
       if(!error) showToast('Saved, but some new fields (destinations / receipt $ / disposal comments) were NOT stored — office must run the latest database migrations.');
+    }
+    if(error && isMissingOrderColumnsError(error.message)) {
+      const { site_contact, delivery_window, access_notes, ...legacyRow2 } = rowData;
+      ({ error } = await sb.from('dockets').upsert(legacyRow2, { onConflict: 'id' }));
+      if(!error) showToast('Saved, but the contact, window and access notes were NOT stored — office must run migration_013.');
     }
     if(error) throw error;
     const action = auditAction || (stageKey === 'order' ? 'saved:order' : 'signed:'+stageKey);
@@ -2851,6 +2885,180 @@ function reopenStep(n) {
   alert('Office use only — reason required (not implemented yet)');
 }
 
+
+// ── ORDER ATTACHMENTS (PDFs, plans and photos with markup) ─────────────────
+// Shared by the office and driver apps. Files go in the existing
+// `docket-photos` storage bucket; the list lives in dockets.attachments (jsonb,
+// migration_013). A new commit always re-reads the latest list first so an
+// attachment added by the office while a driver is editing is never overwritten.
+var ATT_BUCKET = 'docket-photos';
+var ATT_STATES = {};
+var _attUrls = new Map();
+function attIsImage(a){ return /^image\//.test(a.type||'') || /\.(jpe?g|png|gif|webp|heic)$/i.test(a.name||''); }
+function attPublicUrl(a){ return sb.storage.from(ATT_BUCKET).getPublicUrl(a.path).data.publicUrl; }
+function attSafeName(n){ return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').slice(-60); }
+function attSize(n){ n = Number(n)||0; return n > 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB'; }
+function attFileUrl(f){ if(!_attUrls.has(f)) _attUrls.set(f, URL.createObjectURL(f)); return _attUrls.get(f); }
+
+// Read-only list (thumbnails for images, a chip for PDFs/other files).
+function attViewHtml(list){
+  list = list || [];
+  if(!list.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">' + list.map(a => {
+    const u = attPublicUrl(a);
+    if(attIsImage(a)) return `<a href="${esc(u)}" target="_blank" rel="noopener" style="display:block;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid #d9dde3;background:#f1f3f6"><img src="${esc(u)}" alt="${esc(a.name||'attachment')}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></a>`;
+    return `<a href="${esc(u)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:9px 12px;border-radius:8px;border:1px solid #d9dde3;background:#fff;color:#1a1a1a;font-size:13px;font-weight:600;text-decoration:none;max-width:100%"><span style="font-size:18px">&#128196;</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${esc(a.name||'File')}</span><span style="font-size:11px;font-weight:400;color:#888">${esc(attSize(a.size))}</span></a>`;
+  }).join('') + '</div>';
+}
+
+// Upload files; returns { ok:[entries], failedFiles:[File] }
+async function attUpload(docketId, files, by){
+  const ok = [], failedFiles = [];
+  for(const file of files){
+    try {
+      const type = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'application/octet-stream');
+      const path = docketId + '/attach_' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '_' + attSafeName(file.name);
+      const { error } = await sb.storage.from(ATT_BUCKET).upload(path, file, { contentType: type, upsert:false });
+      if(error) throw error;
+      ok.push({ path, name: file.name || 'File', type, size: file.size || 0, by: by || null, at: new Date().toISOString() });
+    } catch(e){ console.error('attachment upload', e); failedFiles.push(file); }
+  }
+  return { ok, failedFiles };
+}
+
+// ── editor used by the New order forms (office drawer + driver step 1) ──
+function attInit(key, containerId, existing){
+  ATT_STATES[key] = { cid: containerId, existing: (existing||[]).slice(), pending: [], removed: [] };
+  attRender(key);
+}
+function attAddFiles(key, input){
+  const s = ATT_STATES[key]; if(!s) return;
+  Array.from(input.files || []).forEach(f => s.pending.push(f));
+  input.value = '';
+  attRender(key);
+}
+function attRemoveExisting(key, i){ const s = ATT_STATES[key]; if(!s) return; s.removed.push(s.existing.splice(i,1)[0]); attRender(key); }
+function attRemovePending(key, i){ const s = ATT_STATES[key]; if(!s) return; s.pending.splice(i,1); attRender(key); }
+async function attMarkPending(key, i){
+  const s = ATT_STATES[key]; if(!s) return;
+  const nf = await attMarkup(s.pending[i]);
+  if(nf){ s.pending[i] = nf; attRender(key); }
+}
+async function attMarkExisting(key, i){
+  const s = ATT_STATES[key]; if(!s) return;
+  try {
+    const a = s.existing[i];
+    const blob = await (await fetch(attPublicUrl(a))).blob();
+    const nf = await attMarkup(new File([blob], a.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+    if(nf){ s.pending.push(nf); attRender(key); }
+  } catch(e){ console.error(e); if(typeof showToast==='function') showToast('Could not open that photo for markup.'); }
+}
+function attRender(key){
+  const s = ATT_STATES[key]; if(!s) return;
+  const box = document.getElementById(s.cid); if(!box) return;
+  const btn = 'border:1px solid #cfd4db;background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  const row = (thumb, name, meta, actions) => `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e1e5ea;border-radius:9px;background:#fafbfc;margin-top:6px">${thumb}<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div><div style="font-size:11px;color:#888">${meta}</div></div><div style="display:flex;gap:6px;flex-shrink:0">${actions}</div></div>`;
+  const thumbImg = u => `<img src="${esc(u)}" style="width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0">`;
+  const thumbPdf = '<div style="width:44px;height:44px;border-radius:6px;background:#fdecea;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">&#128196;</div>';
+  let html = '';
+  s.existing.forEach((a,i) => {
+    const img = attIsImage(a);
+    html += row(img ? thumbImg(attPublicUrl(a)) : thumbPdf, a.name, 'Attached &middot; ' + esc(attSize(a.size)),
+      (img ? `<button type="button" style="${btn}" onclick="attMarkExisting('${key}',${i})">Mark up</button>` : '') + `<button type="button" style="${btn};color:#b3261e" onclick="attRemoveExisting('${key}',${i})">Remove</button>`);
+  });
+  s.pending.forEach((f,i) => {
+    const img = /^image\//.test(f.type||'');
+    html += row(img ? thumbImg(attFileUrl(f)) : thumbPdf, f.name, 'Will attach when you save &middot; ' + esc(attSize(f.size)),
+      (img ? `<button type="button" style="${btn}" onclick="attMarkPending('${key}',${i})">Mark up</button>` : '') + `<button type="button" style="${btn};color:#b3261e" onclick="attRemovePending('${key}',${i})">Remove</button>`);
+  });
+  box.innerHTML = html;
+}
+// Upload anything pending, merge with the latest list in the database, save it.
+async function attCommit(key, docketId, by){
+  const s = ATT_STATES[key];
+  if(!s || (!s.pending.length && !s.removed.length)) return { changed:false, failed:0, list: s ? s.existing : [] };
+  const up = await attUpload(docketId, s.pending, by);
+  const r = await sb.from('dockets').select('attachments').eq('id', docketId).maybeSingle();
+  if(r.error) throw r.error;
+  const cur = (r.data && r.data.attachments) || [];
+  const gone = new Set(s.removed.map(a => a.path));
+  const list = cur.filter(a => !gone.has(a.path)).concat(up.ok);
+  const u = await sb.from('dockets').update({ attachments: list }).eq('id', docketId);
+  if(u.error) throw u.error;
+  return { changed:true, failed: up.failedFiles.length, list };
+}
+function isMissingOrderColumnsError(msg){ return /site_contact|delivery_window|access_notes|attachments/.test(msg || ''); }
+
+// ── photo markup: draw on a photo (circle the bin spot, mark the wire, etc.) ──
+function attMarkup(file){
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); if(typeof showToast==='function') showToast('Could not open that image for markup.'); resolve(null); };
+    img.onload = () => {
+      const max = 1800, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const W = Math.round(img.naturalWidth * sc), H = Math.round(img.naturalHeight * sc);
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;display:flex;flex-direction:column;font-family:inherit';
+      const cb = 'border:2px solid #fff;border-radius:50%;width:30px;height:30px;cursor:pointer;padding:0';
+      const tb = 'border:none;border-radius:7px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit';
+      ov.innerHTML = `<div style="display:flex;gap:8px;align-items:center;padding:10px;background:#111;flex-wrap:wrap">
+        <span style="color:#fff;font-size:13px;margin-right:4px">Draw on the photo</span>
+        <button data-c="#e53935" style="${cb};background:#e53935"></button><button data-c="#fdd835" style="${cb};background:#fdd835"></button><button data-c="#ffffff" style="${cb};background:#fff"></button><button data-c="#111111" style="${cb};background:#111"></button>
+        <button data-undo style="${tb};background:#333;color:#fff">Undo</button>
+        <span style="flex:1"></span>
+        <button data-cancel style="${tb};background:#333;color:#fff">Cancel</button>
+        <button data-done style="${tb};background:#1D9E75;color:#fff">Done</button></div>
+        <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px"><canvas style="max-width:100%;max-height:100%;touch-action:none;background:#fff"></canvas></div>`;
+      document.body.appendChild(ov);
+      const cv = ov.querySelector('canvas'); cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      let color = '#e53935', strokes = [], cur = null;
+      const lw = Math.max(5, Math.round(Math.max(W,H) / 140));
+      const draw = () => {
+        ctx.drawImage(img, 0, 0, W, H);
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = lw;
+        strokes.concat(cur ? [cur] : []).forEach(st => {
+          ctx.strokeStyle = st.c; ctx.fillStyle = st.c; ctx.beginPath();
+          st.p.forEach((pt,i) => i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]));
+          if(st.p.length === 1){ ctx.arc(st.p[0][0], st.p[0][1], lw/2, 0, 6.3); ctx.fill(); } else ctx.stroke();
+        });
+      };
+      const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+      cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); cur = { c: color, p: [pos(e)] }; draw(); e.preventDefault(); });
+      cv.addEventListener('pointermove', e => { if(!cur) return; cur.p.push(pos(e)); draw(); e.preventDefault(); });
+      const end = () => { if(cur){ strokes.push(cur); cur = null; draw(); } };
+      cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+      ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { color = b.dataset.c; });
+      ov.querySelector('[data-undo]').onclick = () => { strokes.pop(); draw(); };
+      const close = out => { ov.remove(); URL.revokeObjectURL(url); resolve(out); };
+      ov.querySelector('[data-cancel]').onclick = () => close(null);
+      ov.querySelector('[data-done]').onclick = () => {
+        if(!strokes.length) return close(null);
+        cv.toBlob(b => close(b ? new File([b], (file.name || 'photo').replace(/\.[^.]+$/, '') + '-marked.jpg', { type: 'image/jpeg' }) : null), 'image/jpeg', 0.88);
+      };
+      draw();
+    };
+    img.src = url;
+  });
+}
+
+function orderInfoHtml(j) {
+  const line = (icon, label, val) => `<div style="display:flex;gap:8px;font-size:12px;line-height:1.4;margin-top:5px"><i class="ti ti-${icon}" style="color:#9a6a00;font-size:15px;flex-shrink:0"></i><div style="min-width:0"><b>${label}:</b> ${val}</div></div>`;
+  const rows = [];
+  if(j.deliveryWindow) rows.push(line('clock', 'When', esc(j.deliveryWindow)));
+  if(j.siteContact) {
+    const m = j.siteContact.match(/\+?\d[\d\s()-]{7,}\d/);
+    const t = esc(j.siteContact);
+    rows.push(line('phone', 'Contact', m ? `<a href="tel:${esc(m[0].replace(/[^\d+]/g,''))}" style="color:#0b5cad;font-weight:600">${t}</a>` : t));
+  }
+  if(j.accessNotes) rows.push(line('map-pin', 'Access', `<span style="white-space:pre-wrap">${esc(j.accessNotes)}</span>`));
+  if(j.comments) rows.push(line('message-2', 'Notes', `<span style="white-space:pre-wrap">${esc(j.comments)}</span>`));
+  const att = attViewHtml(j.attachments);
+  if(!rows.length && !att) return '';
+  return `<div style="background:#fff8e1;border-left:3px solid #FAC775;border-radius:0 8px 8px 0;padding:8px 10px;margin:8px 0"><div style="font-size:10px;font-weight:700;color:#854F0B;text-transform:uppercase;letter-spacing:.4px">Order info</div>${rows.join('')}${att}</div>`;
+}
+
 // ── SAVE & EXIT (per stage) ──
 function gatherFormData() {
   return {
@@ -2862,6 +3070,9 @@ function gatherFormData() {
     binType: document.getElementById('f-bintype').value || '',
     wasteType: [...selWasteTypes].join(', '),
     comments: document.getElementById('f-comments').value || '',
+    siteContact: (document.getElementById('f-site-contact')?.value || '').trim(),
+    deliveryWindow: document.getElementById('f-window')?.value || '',
+    accessNotes: (document.getElementById('f-access')?.value || '').trim(),
     disComments: (document.getElementById('f-dis-comments')?.value || '').trim(),
     arrDate: document.getElementById('f-arr-date').value || '',
     arrTime: document.getElementById('f-arr-time').value || '',
@@ -3012,6 +3223,12 @@ async function saveAndExit(stageKey) {
     if(stageKey === 'order') registerNewSiteIfNeeded(FOLDERS.find(f => f.name === data.client));
     // Upload any buffered photos
     const photosFailed = await uploadDocketPhotos(job.id);
+    let attMsg = '';
+    try {
+      const ar = await attCommit('f', job.id, driver ? driver.id : null);
+      if(ar.changed) job.attachments = ar.list;
+      if(ar.failed) attMsg = ' ' + ar.failed + ' attachment' + (ar.failed>1?'s':'') + ' failed to upload — add again from the job.';
+    } catch(e) { console.error('attachments', e); attMsg = ' Attachments were NOT saved (' + (e.message||e) + ').'; }
     await clearDraft(dKey);
 
     const stageDone = stageKey === 'disposal' && hasSig;
@@ -3022,7 +3239,7 @@ async function saveAndExit(stageKey) {
       renderDoneList();
     }
 
-    const photoWarning = photosFailed ? ' Some photos are safe on this phone and will upload automatically when you have signal.' : '';
+    const photoWarning = (photosFailed ? ' Some photos are safe on this phone and will upload automatically when you have signal.' : '') + attMsg;
     if(hasSig) showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.' + photoWarning);
     else showToast('Saved — get a signature later to mark this step done.' + photoWarning);
 
