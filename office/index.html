@@ -635,7 +635,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       <input type="file" id="nd-att-input" accept="image/*,application/pdf" multiple onchange="attAddFiles('nd',this)">
       <div id="nd-att-list"></div>
     </div>
-    <label class="quote-toggle"><input type="checkbox" id="nd-request-review"><span>Ask for a Google review once this job is done — only tick for customers you know are happy</span></label>
+    <label class="quote-toggle"><input type="checkbox" id="nd-request-review"><span>Show the "Request Google review" button on this order once completed (drivers also text a thank-you with the review link after pickup)</span></label>
     <label class="quote-toggle"><input type="checkbox" id="nd-is-quote" onchange="toggleNdQuoteTray()"><span>This is a quotation — no bin booked yet</span></label>
     <div id="nd-quote-tray" style="display:none">
       <div class="fld" style="margin-bottom:6px"><label>Quote items</label></div>
@@ -1782,7 +1782,7 @@ function renderDrawerDetails(d){
           <div style="margin-top:8px"><label class="btn-s" style="display:inline-block;cursor:pointer"><i class="ti ti-paperclip"></i> Add PDF or photo<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="drAttAdd('${esc(d.id)}',this)"></label></div>
         </div>` : ''}
       ${ed
-        ? `<div class="dr-field" style="grid-column:1/-1"><label>Google review</label><label class="chk" style="margin:2px 0 0"><input type="checkbox" id="dr-e-request-review" ${d.request_review?'checked':''}> Ask this customer for a Google review once completed — only tick for customers you know are happy</label></div>`
+        ? `<div class="dr-field" style="grid-column:1/-1"><label>Google review</label><label class="chk" style="margin:2px 0 0"><input type="checkbox" id="dr-e-request-review" ${d.request_review?'checked':''}> Show the "Request Google review" button on this order once completed (drivers also text a thank-you after pickup)</label></div>`
         : fieldRow('Google review', d.request_review ? 'Will be asked' : 'Not asked')}
     </div>
     ${d.is_quote ? `<div class="dr-sect">
