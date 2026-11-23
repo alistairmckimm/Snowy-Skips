@@ -635,7 +635,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       <input type="file" id="nd-att-input" accept="image/*,application/pdf" multiple onchange="attAddFiles('nd',this)">
       <div id="nd-att-list"></div>
     </div>
-    <label class="quote-toggle"><input type="checkbox" id="nd-request-review"><span>Show the "Request Google review" button on this order once completed (drivers also text a thank-you with the review link after pickup)</span></label>
+    <label class="quote-toggle"><input type="checkbox" id="nd-request-review"><span>Show the "Request Google review" button on this order once completed</span></label>
     <label class="quote-toggle"><input type="checkbox" id="nd-is-quote" onchange="toggleNdQuoteTray()"><span>This is a quotation — no bin booked yet</span></label>
     <div id="nd-quote-tray" style="display:none">
       <div class="fld" style="margin-bottom:6px"><label>Quote items</label></div>
@@ -1303,7 +1303,8 @@ function buildReviewMessage(customerName){
   const greet = customerName ? ('Hi ' + customerName + ',') : 'Hi,';
   return {
     subject: 'Thanks from Snowy Skips — quick favour?',
-    body: greet + '\n\nThanks for choosing Snowy Skips for your skip bin! If you have a minute, a quick Google review would really help us out and lets other locals know what to expect:\n\n' + GOOGLE_REVIEW_LINK + '\n\nThanks again,\nSnowy Skips'
+    body: greet + '\n\nThanks again for choosing Snowy Skips! If you have a minute, a quick Google review really helps a local business like ours:\n' + GOOGLE_REVIEW_LINK + '\n\nCheers,\nSnowy Skips',
+    sms: greet + ' thanks again for choosing Snowy Skips! If you have a minute, a quick Google review really helps a local business: ' + GOOGLE_REVIEW_LINK
   };
 }
 
@@ -1319,8 +1320,13 @@ async function requestGoogleReview(docketId){
   if(!d) return;
   const client = d.client_id ? CLIENTS.find(c => c.id === d.client_id) : null;
   const name = d.oneoff_name || (client ? client.name : '');
-  const contact = (d.oneoff_contact || (client ? client.contact : '') || '').trim();
-  const msg = buildReviewMessage(name);
+  let contact = (d.oneoff_contact || (client ? client.contact : '') || '').trim();
+  let sc = (d.site_contact || '').trim();
+  let sitePhone = (sc.match(/\+?\d[\d\s()-]{7,}\d/) || [''])[0];
+  if(!contact && sitePhone) contact = sitePhone;
+  let first = (name || '').trim().split(/\s+/)[0];
+  if(!d.oneoff_name && sc && sitePhone) { const n = sc.replace(sitePhone,'').replace(/[-:,()]+/g,' ').trim(); if(n) first = n.split(/\s+/)[0]; }
+  const msg = buildReviewMessage(client && !d.oneoff_name && !(sc && sitePhone) ? '' : first);
   if(contact && contact.includes('@')){
     window.open('mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent(msg.subject) + '&body=' + encodeURIComponent(msg.body), '_blank');
     showToast('Review request opened in your email app.');
@@ -1328,8 +1334,11 @@ async function requestGoogleReview(docketId){
     // Treat anything else on file as a phone number. sms: URI support for a
     // pre-filled body varies a bit by device/OS, but every major mobile
     // platform at least opens the compose screen with the right contact.
-    window.open('sms:' + encodeURIComponent(contact) + '?body=' + encodeURIComponent(msg.body), '_blank');
-    showToast('Review request opened in your messages app.');
+    // Office is usually on a computer, so copy the text too: paste it into a message from the phone
+    // that already has the conversation with this customer.
+    try { await navigator.clipboard.writeText(msg.sms); } catch(e){}
+    window.open('sms:' + contact.replace(/[^\d+]/g,'') + '?&body=' + encodeURIComponent(msg.sms), '_blank');
+    showToast('Text copied — send it to ' + contact + ' from your phone.');
   } else {
     try {
       await navigator.clipboard.writeText(msg.body);
@@ -1782,7 +1791,7 @@ function renderDrawerDetails(d){
           <div style="margin-top:8px"><label class="btn-s" style="display:inline-block;cursor:pointer"><i class="ti ti-paperclip"></i> Add PDF or photo<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="drAttAdd('${esc(d.id)}',this)"></label></div>
         </div>` : ''}
       ${ed
-        ? `<div class="dr-field" style="grid-column:1/-1"><label>Google review</label><label class="chk" style="margin:2px 0 0"><input type="checkbox" id="dr-e-request-review" ${d.request_review?'checked':''}> Show the "Request Google review" button on this order once completed (drivers also text a thank-you after pickup)</label></div>`
+        ? `<div class="dr-field" style="grid-column:1/-1"><label>Google review</label><label class="chk" style="margin:2px 0 0"><input type="checkbox" id="dr-e-request-review" ${d.request_review?'checked':''}> Show the "Request Google review" button on this order once completed</label></div>`
         : fieldRow('Google review', d.request_review ? 'Will be asked' : 'Not asked')}
     </div>
     ${d.is_quote ? `<div class="dr-sect">
