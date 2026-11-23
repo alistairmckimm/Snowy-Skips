@@ -611,6 +611,30 @@ table.t tbody tr:hover{background:#f7f9fc}
       <label>Comments (optional)</label>
       <textarea id="nd-comments" placeholder="Anything the driver should know…"></textarea>
     </div>
+    <div class="fld">
+      <label>Site contact on the day <span style="font-weight:400;color:var(--mt)">— name and phone</span></label>
+      <input type="text" id="nd-contact" placeholder="e.g. Jim 0412 345 678">
+    </div>
+    <div class="fld">
+      <label>Delivery window</label>
+      <select id="nd-window">
+        <option value="">Any time</option>
+        <option>Early (before 8am)</option>
+        <option>Morning</option>
+        <option>Afternoon</option>
+        <option>Call before delivery</option>
+        <option>Specific time (see access notes)</option>
+      </select>
+    </div>
+    <div class="fld">
+      <label>Access and bin placement <span style="font-weight:400;color:var(--mt)">— gate codes, wires, where the bin goes</span></label>
+      <textarea id="nd-access" placeholder="e.g. Gate code 1234. Overhead wires on the left of the driveway, place the bin on the right."></textarea>
+    </div>
+    <div class="fld">
+      <label>Attachments <span style="font-weight:400;color:var(--mt)">— PDFs, plans and photos the driver should see</span></label>
+      <input type="file" id="nd-att-input" accept="image/*,application/pdf" multiple onchange="attAddFiles('nd',this)">
+      <div id="nd-att-list"></div>
+    </div>
     <label class="quote-toggle"><input type="checkbox" id="nd-request-review"><span>Ask for a Google review once this job is done — only tick for customers you know are happy</span></label>
     <label class="quote-toggle"><input type="checkbox" id="nd-is-quote" onchange="toggleNdQuoteTray()"><span>This is a quotation — no bin booked yet</span></label>
     <div id="nd-quote-tray" style="display:none">
@@ -1747,6 +1771,16 @@ function renderDrawerDetails(d){
       </div>
       ${d.oneoff_name?`<div class="dr-grid">${ed ? edRow('One-off client', 'dr-e-oneoff-name', d.oneoff_name) : fieldRow('One-off client', d.oneoff_name)}${ed ? edRow('Contact', 'dr-e-oneoff-contact', d.oneoff_contact) : fieldRow('Contact', d.oneoff_contact)}</div>`:''}
       ${ed ? edRow('Comments', 'dr-e-comments', d.comments, {type:'textarea'}) : (d.comments?fieldRow('Comments', d.comments):'')}
+      ${Object.prototype.hasOwnProperty.call(d,'access_notes') ? `
+        <div class="dr-grid">
+          ${ed ? edRow('Site contact', 'dr-e-contact', d.site_contact) : fieldRow('Site contact', d.site_contact)}
+          ${ed ? edRow('Delivery window', 'dr-e-window', d.delivery_window) : fieldRow('Delivery window', d.delivery_window)}
+        </div>
+        ${ed ? edRow('Access and bin placement', 'dr-e-access', d.access_notes, {type:'textarea'}) : (d.access_notes?fieldRow('Access and bin placement', d.access_notes):'')}
+        <div class="dr-field" style="grid-column:1/-1"><label>Attachments <span style="font-weight:400;color:var(--mt)">(the driver sees these on the job)</span></label>
+          ${drAttListHtml(d)}
+          <div style="margin-top:8px"><label class="btn-s" style="display:inline-block;cursor:pointer"><i class="ti ti-paperclip"></i> Add PDF or photo<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="drAttAdd('${esc(d.id)}',this)"></label></div>
+        </div>` : ''}
       ${ed
         ? `<div class="dr-field" style="grid-column:1/-1"><label>Google review</label><label class="chk" style="margin:2px 0 0"><input type="checkbox" id="dr-e-request-review" ${d.request_review?'checked':''}> Ask this customer for a Google review once completed — only tick for customers you know are happy</label></div>`
         : fieldRow('Google review', d.request_review ? 'Will be asked' : 'Not asked')}
@@ -1822,6 +1856,216 @@ function cancelDetailsEdit(){
   if(activeDocket) renderDrawerDetails(activeDocket);
 }
 
+
+// ── ORDER ATTACHMENTS (PDFs, plans and photos with markup) ─────────────────
+// Shared by the office and driver apps. Files go in the existing
+// `docket-photos` storage bucket; the list lives in dockets.attachments (jsonb,
+// migration_013). A new commit always re-reads the latest list first so an
+// attachment added by the office while a driver is editing is never overwritten.
+var ATT_BUCKET = 'docket-photos';
+var ATT_STATES = {};
+var _attUrls = new Map();
+function attIsImage(a){ return /^image\//.test(a.type||'') || /\.(jpe?g|png|gif|webp|heic)$/i.test(a.name||''); }
+function attPublicUrl(a){ return sb.storage.from(ATT_BUCKET).getPublicUrl(a.path).data.publicUrl; }
+function attSafeName(n){ return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').slice(-60); }
+function attSize(n){ n = Number(n)||0; return n > 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB'; }
+function attFileUrl(f){ if(!_attUrls.has(f)) _attUrls.set(f, URL.createObjectURL(f)); return _attUrls.get(f); }
+
+// Read-only list (thumbnails for images, a chip for PDFs/other files).
+function attViewHtml(list){
+  list = list || [];
+  if(!list.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">' + list.map(a => {
+    const u = attPublicUrl(a);
+    if(attIsImage(a)) return `<a href="${esc(u)}" target="_blank" rel="noopener" style="display:block;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid #d9dde3;background:#f1f3f6"><img src="${esc(u)}" alt="${esc(a.name||'attachment')}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></a>`;
+    return `<a href="${esc(u)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:9px 12px;border-radius:8px;border:1px solid #d9dde3;background:#fff;color:#1a1a1a;font-size:13px;font-weight:600;text-decoration:none;max-width:100%"><span style="font-size:18px">&#128196;</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${esc(a.name||'File')}</span><span style="font-size:11px;font-weight:400;color:#888">${esc(attSize(a.size))}</span></a>`;
+  }).join('') + '</div>';
+}
+
+// Upload files; returns { ok:[entries], failedFiles:[File] }
+async function attUpload(docketId, files, by){
+  const ok = [], failedFiles = [];
+  for(const file of files){
+    try {
+      const type = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'application/octet-stream');
+      const path = docketId + '/attach_' + Date.now() + '_' + Math.random().toString(36).slice(2,7) + '_' + attSafeName(file.name);
+      const { error } = await sb.storage.from(ATT_BUCKET).upload(path, file, { contentType: type, upsert:false });
+      if(error) throw error;
+      ok.push({ path, name: file.name || 'File', type, size: file.size || 0, by: by || null, at: new Date().toISOString() });
+    } catch(e){ console.error('attachment upload', e); failedFiles.push(file); }
+  }
+  return { ok, failedFiles };
+}
+
+// ── editor used by the New order forms (office drawer + driver step 1) ──
+function attInit(key, containerId, existing){
+  ATT_STATES[key] = { cid: containerId, existing: (existing||[]).slice(), pending: [], removed: [] };
+  attRender(key);
+}
+function attAddFiles(key, input){
+  const s = ATT_STATES[key]; if(!s) return;
+  Array.from(input.files || []).forEach(f => s.pending.push(f));
+  input.value = '';
+  attRender(key);
+}
+function attRemoveExisting(key, i){ const s = ATT_STATES[key]; if(!s) return; s.removed.push(s.existing.splice(i,1)[0]); attRender(key); }
+function attRemovePending(key, i){ const s = ATT_STATES[key]; if(!s) return; s.pending.splice(i,1); attRender(key); }
+async function attMarkPending(key, i){
+  const s = ATT_STATES[key]; if(!s) return;
+  const nf = await attMarkup(s.pending[i]);
+  if(nf){ s.pending[i] = nf; attRender(key); }
+}
+async function attMarkExisting(key, i){
+  const s = ATT_STATES[key]; if(!s) return;
+  try {
+    const a = s.existing[i];
+    const blob = await (await fetch(attPublicUrl(a))).blob();
+    const nf = await attMarkup(new File([blob], a.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+    if(nf){ s.pending.push(nf); attRender(key); }
+  } catch(e){ console.error(e); if(typeof showToast==='function') showToast('Could not open that photo for markup.'); }
+}
+function attRender(key){
+  const s = ATT_STATES[key]; if(!s) return;
+  const box = document.getElementById(s.cid); if(!box) return;
+  const btn = 'border:1px solid #cfd4db;background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  const row = (thumb, name, meta, actions) => `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e1e5ea;border-radius:9px;background:#fafbfc;margin-top:6px">${thumb}<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div><div style="font-size:11px;color:#888">${meta}</div></div><div style="display:flex;gap:6px;flex-shrink:0">${actions}</div></div>`;
+  const thumbImg = u => `<img src="${esc(u)}" style="width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0">`;
+  const thumbPdf = '<div style="width:44px;height:44px;border-radius:6px;background:#fdecea;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">&#128196;</div>';
+  let html = '';
+  s.existing.forEach((a,i) => {
+    const img = attIsImage(a);
+    html += row(img ? thumbImg(attPublicUrl(a)) : thumbPdf, a.name, 'Attached &middot; ' + esc(attSize(a.size)),
+      (img ? `<button type="button" style="${btn}" onclick="attMarkExisting('${key}',${i})">Mark up</button>` : '') + `<button type="button" style="${btn};color:#b3261e" onclick="attRemoveExisting('${key}',${i})">Remove</button>`);
+  });
+  s.pending.forEach((f,i) => {
+    const img = /^image\//.test(f.type||'');
+    html += row(img ? thumbImg(attFileUrl(f)) : thumbPdf, f.name, 'Will attach when you save &middot; ' + esc(attSize(f.size)),
+      (img ? `<button type="button" style="${btn}" onclick="attMarkPending('${key}',${i})">Mark up</button>` : '') + `<button type="button" style="${btn};color:#b3261e" onclick="attRemovePending('${key}',${i})">Remove</button>`);
+  });
+  box.innerHTML = html;
+}
+// Upload anything pending, merge with the latest list in the database, save it.
+async function attCommit(key, docketId, by){
+  const s = ATT_STATES[key];
+  if(!s || (!s.pending.length && !s.removed.length)) return { changed:false, failed:0, list: s ? s.existing : [] };
+  const up = await attUpload(docketId, s.pending, by);
+  const r = await sb.from('dockets').select('attachments').eq('id', docketId).maybeSingle();
+  if(r.error) throw r.error;
+  const cur = (r.data && r.data.attachments) || [];
+  const gone = new Set(s.removed.map(a => a.path));
+  const list = cur.filter(a => !gone.has(a.path)).concat(up.ok);
+  const u = await sb.from('dockets').update({ attachments: list }).eq('id', docketId);
+  if(u.error) throw u.error;
+  return { changed:true, failed: up.failedFiles.length, list };
+}
+function isMissingOrderColumnsError(msg){ return /site_contact|delivery_window|access_notes|attachments/.test(msg || ''); }
+
+// ── photo markup: draw on a photo (circle the bin spot, mark the wire, etc.) ──
+function attMarkup(file){
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); if(typeof showToast==='function') showToast('Could not open that image for markup.'); resolve(null); };
+    img.onload = () => {
+      const max = 1800, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const W = Math.round(img.naturalWidth * sc), H = Math.round(img.naturalHeight * sc);
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;display:flex;flex-direction:column;font-family:inherit';
+      const cb = 'border:2px solid #fff;border-radius:50%;width:30px;height:30px;cursor:pointer;padding:0';
+      const tb = 'border:none;border-radius:7px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit';
+      ov.innerHTML = `<div style="display:flex;gap:8px;align-items:center;padding:10px;background:#111;flex-wrap:wrap">
+        <span style="color:#fff;font-size:13px;margin-right:4px">Draw on the photo</span>
+        <button data-c="#e53935" style="${cb};background:#e53935"></button><button data-c="#fdd835" style="${cb};background:#fdd835"></button><button data-c="#ffffff" style="${cb};background:#fff"></button><button data-c="#111111" style="${cb};background:#111"></button>
+        <button data-undo style="${tb};background:#333;color:#fff">Undo</button>
+        <span style="flex:1"></span>
+        <button data-cancel style="${tb};background:#333;color:#fff">Cancel</button>
+        <button data-done style="${tb};background:#1D9E75;color:#fff">Done</button></div>
+        <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px"><canvas style="max-width:100%;max-height:100%;touch-action:none;background:#fff"></canvas></div>`;
+      document.body.appendChild(ov);
+      const cv = ov.querySelector('canvas'); cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      let color = '#e53935', strokes = [], cur = null;
+      const lw = Math.max(5, Math.round(Math.max(W,H) / 140));
+      const draw = () => {
+        ctx.drawImage(img, 0, 0, W, H);
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = lw;
+        strokes.concat(cur ? [cur] : []).forEach(st => {
+          ctx.strokeStyle = st.c; ctx.fillStyle = st.c; ctx.beginPath();
+          st.p.forEach((pt,i) => i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]));
+          if(st.p.length === 1){ ctx.arc(st.p[0][0], st.p[0][1], lw/2, 0, 6.3); ctx.fill(); } else ctx.stroke();
+        });
+      };
+      const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+      cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); cur = { c: color, p: [pos(e)] }; draw(); e.preventDefault(); });
+      cv.addEventListener('pointermove', e => { if(!cur) return; cur.p.push(pos(e)); draw(); e.preventDefault(); });
+      const end = () => { if(cur){ strokes.push(cur); cur = null; draw(); } };
+      cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+      ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { color = b.dataset.c; });
+      ov.querySelector('[data-undo]').onclick = () => { strokes.pop(); draw(); };
+      const close = out => { ov.remove(); URL.revokeObjectURL(url); resolve(out); };
+      ov.querySelector('[data-cancel]').onclick = () => close(null);
+      ov.querySelector('[data-done]').onclick = () => {
+        if(!strokes.length) return close(null);
+        cv.toBlob(b => close(b ? new File([b], (file.name || 'photo').replace(/\.[^.]+$/, '') + '-marked.jpg', { type: 'image/jpeg' }) : null), 'image/jpeg', 0.88);
+      };
+      draw();
+    };
+    img.src = url;
+  });
+}
+
+// ── attachments on an existing docket (docket drawer) ──
+function drAttListHtml(d){
+  const list = d.attachments || [];
+  if(!list.length) return '<div style="font-size:12px;color:var(--mt)">Nothing attached yet.</div>';
+  return list.map((a,i) => {
+    const u = attPublicUrl(a), img = attIsImage(a);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #e1e5ea;border-radius:9px;background:#fafbfc;margin-top:6px">
+      <a href="${esc(u)}" target="_blank" rel="noopener" style="flex-shrink:0">${img ? `<img src="${esc(u)}" style="width:44px;height:44px;border-radius:6px;object-fit:cover;display:block">` : '<span style="width:44px;height:44px;border-radius:6px;background:#fdecea;display:flex;align-items:center;justify-content:center;font-size:22px">&#128196;</span>'}</a>
+      <a href="${esc(u)}" target="_blank" rel="noopener" style="flex:1;min-width:0;color:#1a1a1a;text-decoration:none"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name||'File')}</div><div style="font-size:11px;color:#888">${esc(attSize(a.size))}</div></a>
+      ${img ? `<button type="button" class="btn-s" onclick="drAttMark('${esc(activeDocket.id)}',${i})">Mark up</button>` : ''}
+      <button type="button" class="btn-s" style="color:#b3261e" onclick="drAttRemove('${esc(activeDocket.id)}',${i})">Remove</button></div>`;
+  }).join('');
+}
+async function drAttSave(docketId, mutate){
+  const r = await sb.from('dockets').select('attachments').eq('id', docketId).maybeSingle();
+  if(r.error) throw r.error;
+  const list = mutate((r.data && r.data.attachments) || []);
+  const u = await sb.from('dockets').update({ attachments: list }).eq('id', docketId);
+  if(u.error) throw u.error;
+  await logAudit(docketId, 'edited:attachments', { count: list.length });
+  await loadDocketsFromDB();
+  const fresh = DOCKETS.find(x => x.id === docketId);
+  if(fresh){ activeDocket = fresh; renderDrawerDetails(fresh); }
+}
+async function drAttAdd(docketId, input){
+  const files = Array.from(input.files || []); input.value = '';
+  if(!files.length) return;
+  showToast('Uploading…');
+  try {
+    const up = await attUpload(docketId, files, currentUser ? currentUser.id : null);
+    if(up.ok.length) await drAttSave(docketId, cur => cur.concat(up.ok));
+    showToast(up.failedFiles.length ? up.failedFiles.length + ' file(s) failed to upload — try again.' : 'Attached.');
+  } catch(e){ showToast('Could not attach: ' + (e.message || e)); }
+}
+async function drAttRemove(docketId, idx){
+  const a = ((activeDocket && activeDocket.attachments) || [])[idx]; if(!a) return;
+  if(!confirm('Remove "' + (a.name||'this file') + '" from the order?')) return;
+  try { await drAttSave(docketId, cur => cur.filter(x => x.path !== a.path)); showToast('Removed.'); }
+  catch(e){ showToast('Could not remove: ' + (e.message || e)); }
+}
+async function drAttMark(docketId, idx){
+  const a = ((activeDocket && activeDocket.attachments) || [])[idx]; if(!a) return;
+  try {
+    const blob = await (await fetch(attPublicUrl(a))).blob();
+    const nf = await attMarkup(new File([blob], a.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+    if(!nf) return;
+    const up = await attUpload(docketId, [nf], currentUser ? currentUser.id : null);
+    if(up.ok.length){ await drAttSave(docketId, cur => cur.concat(up.ok)); showToast('Marked-up copy attached (original kept).'); }
+    else showToast('Upload failed — try again.');
+  } catch(e){ showToast('Could not mark up: ' + (e.message || e)); }
+}
+
 async function saveDetailsEdit(docketId){
   const el = id => document.getElementById(id);
   const val = id => { const e = el(id); return e ? (e.value || null) : null; };
@@ -1883,6 +2127,11 @@ async function saveDetailsEdit(docketId){
   if(el('dr-e-request-review')){
     patch.request_review = el('dr-e-request-review').checked;
   }
+  if(el('dr-e-access')){
+    patch.site_contact = txt('dr-e-contact');
+    patch.delivery_window = txt('dr-e-window');
+    patch.access_notes = txt('dr-e-access');
+  }
   // Re-geocode only when the site text actually changed, to avoid a needless
   // lookup (and possibly overwriting a good pin) on every unrelated edit.
   const prevSite = activeDocket ? (activeDocket.site || null) : undefined;
@@ -1906,6 +2155,11 @@ async function saveDetailsEdit(docketId){
     if(error && isMissingReviewColumnsError(error.message)){
       warnReviewColumnsMissingOnce();
       delete patch.request_review;
+      ({ error } = await sb.from('dockets').update(patch).eq('id', docketId));
+    }
+    if(error && isMissingOrderColumnsError(error.message)){
+      showToast('Order info not saved — run migration_013 in Supabase first.');
+      delete patch.site_contact; delete patch.delivery_window; delete patch.access_notes;
       ({ error } = await sb.from('dockets').update(patch).eq('id', docketId));
     }
     if(error) throw error;
@@ -3564,6 +3818,10 @@ function openNewDocket(){
   ndSelWasteTypes = new Set(['Construction']);
   renderNdWasteTypePicker();
   $('nd-comments').value = '';
+  $('nd-contact').value = '';
+  $('nd-window').value = '';
+  $('nd-access').value = '';
+  attInit('nd', 'nd-att-list', []);
   $('nd-err').classList.remove('show');
   $('nd-err').textContent = '';
   $('nd-save').disabled = false;
@@ -3704,6 +3962,9 @@ async function saveNewDocket(){
       bin_type: binType,
       waste_type: wasteType,
       comments: comments || null,
+      site_contact: $('nd-contact').value.trim() || null,
+      delivery_window: $('nd-window').value || null,
+      access_notes: $('nd-access').value.trim() || null,
       stage: 1,
       is_quote: isQuote,
       quote_items: quoteItems,
@@ -3726,8 +3987,19 @@ async function saveNewDocket(){
       delete row.request_review;
       ({ error: insErr } = await sb.from('dockets').insert([row]));
     }
+    if(insErr && isMissingOrderColumnsError(insErr.message)){
+      // migration_013 hasn't been run yet — save the order without the new fields.
+      showToast('Order saved without contact, access notes or attachments — run migration_013 in Supabase first.');
+      delete row.site_contact; delete row.delivery_window; delete row.access_notes;
+      ({ error: insErr } = await sb.from('dockets').insert([row]));
+    }
     if(insErr) throw insErr;
     registerNdNewSiteIfNeeded(client);
+    let attFailCount = 0, attError = '';
+    try {
+      const ar = await attCommit('nd', id, currentUser ? currentUser.id : null);
+      attFailCount = ar.failed;
+    } catch(e){ console.error('order attachments', e); attError = ' Attachments were NOT saved (' + (e.message || e) + ').'; }
     let quotePhotoFailCount = 0;
     for(const file of quotePhotoFiles){
       try {
@@ -3755,7 +4027,7 @@ async function saveNewDocket(){
       }]);
     } catch(e){ console.warn('audit log (order_created) failed', e); }
     closeNewDocket();
-    showToast((isQuote ? 'Quotation ' : 'Order ') + id + ' saved.' + (isQuote ? '' : ' Awaiting delivery driver.') + (quotePhotoFailCount ? ' ' + quotePhotoFailCount + ' photo' + (quotePhotoFailCount>1?'s':'') + ' failed to attach — try re-adding via Edit docket details.' : ''));
+    showToast((isQuote ? 'Quotation ' : 'Order ') + id + ' saved.' + (isQuote ? '' : ' Awaiting delivery driver.') + (quotePhotoFailCount ? ' ' + quotePhotoFailCount + ' photo' + (quotePhotoFailCount>1?'s':'') + ' failed to attach — try re-adding via Edit docket details.' : '') + (attFailCount ? ' ' + attFailCount + ' attachment' + (attFailCount>1?'s':'') + ' failed to upload — add them again from the docket.' : '') + attError);
     // Realtime will refresh the board; force-load too in case the subscription is slow
     loadDocketsFromDB();
   } catch(e){
