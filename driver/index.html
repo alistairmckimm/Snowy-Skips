@@ -839,7 +839,7 @@ const STAGE_NEXT_CLASS = ['','','orange','orange','teal','teal'];
 // on the login screen and in the top bar so Al/drivers can tell — just by
 // looking — whether their phone is showing this build or a cached older one,
 // instead of guessing. Update the date/number whenever this file is edited.
-const APP_BUILD = 'build 2026-11-23.2';
+const APP_BUILD = 'build 2026-11-23.3';
 (function stampBuild(){
   const tags = ['app-build-tag','login-build-tag'];
   tags.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = APP_BUILD; });
@@ -947,7 +947,6 @@ function jobCard(j) {
     </div>
     ${orderInfoHtml(j)}
     <div class="signoff-row">${signoffSummary(j)}</div>
-    ${(j.stage >= 3 && j.stage < 5) ? `<button style="margin:8px 0 2px;width:100%;border:1px solid #f0b429;background:#fffaf0;color:#8a6100;border-radius:10px;padding:9px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer" onclick="offerReviewText('${j.id}')"><i class="ti ti-star"></i> ${rvTexted(j.id) ? 'Thank-you text sent — send again' : 'Send thank-you / review text'}</button>` : ''}
     ${j.stage < 5 ? `<button class="job-next ${nextClass}" onclick="continueJob('${j.id}')">${nextLabel} <i class="ti ti-arrow-right"></i></button>` : '<div style="background:#e1f5ee;color:#155724;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:600"><i class="ti ti-circle-check"></i> Completed</div>'}
   </div>`;
 }
@@ -3061,61 +3060,6 @@ function orderInfoHtml(j) {
 }
 
 // ── SAVE & EXIT (per stage) ──
-
-var GOOGLE_REVIEW_LINK = 'https://g.page/r/CVmI479DHoovEBM/review';
-function rvTextedList(){ try { return JSON.parse(localStorage.getItem('ss_review_texted') || '[]'); } catch(e){ return []; } }
-function rvTexted(id){ return rvTextedList().indexOf(id) > -1; }
-function rvMarkTexted(id){ try { const l = rvTextedList(); if(l.indexOf(id) < 0){ l.push(id); localStorage.setItem('ss_review_texted', JSON.stringify(l.slice(-400))); } } catch(e){} }
-function rvGuessContact(j){
-  const tries = [[j.siteContact, ''], [j.oneoffContact, j.oneoffName || '']];
-  for(const [c, fallbackName] of tries){
-    if(!c) continue;
-    const m = String(c).match(/\+?\d[\d\s()-]{7,}\d/);
-    if(m){
-      let name = String(c).replace(m[0], '').replace(/[-:,()]+/g, ' ').trim();
-      if(!name) name = fallbackName;
-      return { name, phone: m[0].replace(/[^\d+]/g, '') };
-    }
-  }
-  return { name: '', phone: '' };
-}
-function rvMessage(name){
-  const d = (typeof getCurrentDriver === 'function') ? getCurrentDriver() : null;
-  const me = d && d.name ? String(d.name).split(' ')[0] : '';
-  const first = (name || '').trim().split(/\s+/)[0];
-  return 'Hi' + (first ? ' ' + first : '') + ', thanks again for choosing Snowy Skips! If you have a minute, a quick Google review really helps a local business: ' + GOOGLE_REVIEW_LINK + '\n- ' + (me ? me + ', ' : '') + 'Snowy Skips';
-}
-function closeReviewText(){ const o = document.getElementById('rv-overlay'); if(o) o.remove(); }
-function offerReviewText(jobId){
-  const j = jobs.concat(submittedJobs).find(x => x.id === jobId);
-  if(!j) return;
-  closeReviewText();
-  const g = rvGuessContact(j);
-  const ov = document.createElement('div');
-  ov.id = 'rv-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99990;display:flex;align-items:flex-end;justify-content:center';
-  ov.innerHTML = `<div style="background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:18px 16px 22px;max-height:92vh;overflow:auto">
-    <div style="font-size:16px;font-weight:700;margin-bottom:2px"><i class="ti ti-star" style="color:#f0b429"></i> Send a thank-you text?</div>
-    <div style="font-size:12px;color:#777;margin-bottom:12px">${esc(j.site || '')} &middot; ${esc(j.id)}. It opens in your messages app, and you tap Send.</div>
-    <div class="field"><label>Customer name</label><input type="text" id="rv-name" value="${esc(g.name)}" placeholder="e.g. Jim" oninput="document.getElementById('rv-msg').value=rvMessage(this.value)"></div>
-    <div class="field"><label>Customer mobile</label><input type="tel" id="rv-phone" value="${esc(g.phone)}" placeholder="e.g. 0412 345 678"></div>
-    <div class="field"><label>Message</label><textarea id="rv-msg" rows="5">${esc(rvMessage(g.name))}</textarea></div>
-    <button class="btn-p teal" onclick="sendReviewText('${esc(j.id)}')"><i class="ti ti-message-2"></i> Open text message</button>
-    <button class="btn-p" style="margin-top:8px;background:#eee;color:#555" onclick="closeReviewText()">Not this time</button>
-  </div>`;
-  document.body.appendChild(ov);
-}
-function sendReviewText(jobId){
-  const phone = (document.getElementById('rv-phone').value || '').replace(/[^\d+]/g, '');
-  const msg = document.getElementById('rv-msg').value || '';
-  if(phone.replace(/\D/g, '').length < 8){ showToast('Enter the customer\'s mobile number first.'); return; }
-  rvMarkTexted(jobId);
-  try { sb.from('audit_log').insert([{ docket_id: jobId, action: 'review_text_opened', performed_by: (currentDriver && currentDriver.id) || null }]).then(function(){}, function(){}); } catch(e){}
-  closeReviewText();
-  try { renderFolders(); } catch(e){}
-  window.location.href = 'sms:' + phone + '?&body=' + encodeURIComponent(msg);
-}
-
 function gatherFormData() {
   return {
     client: document.getElementById('f-client').value || '',
@@ -3299,7 +3243,6 @@ async function saveAndExit(stageKey) {
     if(hasSig) showToast('Saved. Stage marked done by ' + (driver ? driver.name : 'driver') + '.' + photoWarning);
     else showToast('Saved — get a signature later to mark this step done.' + photoWarning);
 
-    if(stageKey === 'pickup' && hasSig && !rvTexted(job.id)) setTimeout(() => offerReviewText(job.id), 700);
     editingJobId = null;
     const folderToReopen = job.folder;
     resetForm();
