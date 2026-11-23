@@ -525,6 +525,14 @@ table.t tbody tr:hover{background:#f7f9fc}
             <h3 style="font-size:13px;font-weight:700;color:var(--mc);margin-bottom:8px">Reset workflow / reopen</h3>
             <p style="font-size:11px;color:var(--mt);line-height:1.5">Open any docket and use the actions panel at the bottom of the drawer to reset all signatures or reopen a single stage. Both require a reason and are written to the audit log per ISO 14001:2026 clause 6.3.</p>
           </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+            <h3 style="font-size:13px;font-weight:700;color:var(--mc);margin-bottom:10px">Change password</h3>
+            <div class="fld"><label>Current password</label><input type="password" id="cp-old" autocomplete="current-password"></div>
+            <div class="fld"><label>New password <small style="color:#aaa">(min. 6 characters)</small></label><input type="password" id="cp-new" autocomplete="new-password"></div>
+            <div class="fld"><label>Confirm new password</label><input type="password" id="cp-new2" autocomplete="new-password"></div>
+            <div class="login-err" id="cp-err" style="display:none;color:#b3261e;font-size:12px;margin:4px 0 8px"></div>
+            <button class="btn-p" id="cp-btn" onclick="changePassword()"><i class="ti ti-key"></i> Update password</button>
+          </div>
           <button class="btn-p red" onclick="doSignOut()"><i class="ti ti-logout"></i> Sign out</button>
         </div>
       </div>
@@ -1417,6 +1425,29 @@ async function doRegister(){
     if(insErr){ err.textContent='Profile save failed: '+insErr.message; err.classList.add('show'); $('rg-btn').textContent='Create office account'; return; }
     // onAuthStateChange triggers reload
   } catch(e){ err.textContent = e.message||'Registration error.'; err.classList.add('show'); $('rg-btn').textContent='Create office account'; }
+}
+
+async function changePassword(){
+  const err = $('cp-err'), btn = $('cp-btn');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  err.style.display = 'none';
+  const oldP = $('cp-old').value, p1 = $('cp-new').value, p2 = $('cp-new2').value;
+  if(!oldP || !p1 || !p2) return fail('Fill in all three boxes.');
+  if(p1.length < 6) return fail('New password must be at least 6 characters.');
+  if(p1 !== p2) return fail('The two new passwords do not match.');
+  if(p1 === oldP) return fail('The new password is the same as the current one.');
+  const email = (currentUser && currentUser.email) || '';
+  if(!email) return fail('Could not tell which account you are signed in as. Sign out and back in, then try again.');
+  btn.disabled = true;
+  try {
+    const chk = await sb.auth.signInWithPassword({ email, password: oldP });
+    if(chk.error) { btn.disabled = false; return fail('Current password is not right.'); }
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if(error) { btn.disabled = false; return fail(error.message || 'Could not update the password.'); }
+    $('cp-old').value = ''; $('cp-new').value = ''; $('cp-new2').value = '';
+    showToast('Password updated. Use the new one next time you sign in.');
+  } catch(e){ fail(e.message || 'Could not update the password.'); }
+  btn.disabled = false;
 }
 
 async function doSignOut(){
