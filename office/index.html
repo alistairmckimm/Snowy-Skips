@@ -940,6 +940,7 @@ table.t tbody tr:hover{background:#f7f9fc}
       <div class="fld"><label>Password</label><input type="password" id="li-password" placeholder="Your password" autocomplete="current-password"></div>
       <div class="err" id="li-err"></div>
       <button class="btn-p teal" onclick="doSignIn()"><i class="ti ti-login"></i> <span id="li-btn">Sign in</span></button>
+      <div style="text-align:center;margin-top:10px"><a href="#" onclick="forgotPassword();return false" style="font-size:12px;color:#0b5cad">Forgot your password?</a></div>
     </div>
     <div class="lo-pane" id="lp-register">
       <div class="fld"><label>Email *</label><input type="email" id="rg-email" placeholder="you@example.com" autocomplete="username"></div>
@@ -961,6 +962,8 @@ table.t tbody tr:hover{background:#f7f9fc}
 const SUPABASE_URL = 'https://aehdhirvwfawcchkynsr.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_AERCG0lWvzWBYP_pKrAdDA_P08ZgPJ-';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Opened from a "reset your password" email? Remember it before the library clears the URL.
+let _recoveryMode = /type=recovery/.test(location.hash || '');
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let CLIENTS = [];       // [{id, name, short_code, icon, is_general, active, created_at}]
@@ -1425,6 +1428,50 @@ async function doRegister(){
     if(insErr){ err.textContent='Profile save failed: '+insErr.message; err.classList.add('show'); $('rg-btn').textContent='Create office account'; return; }
     // onAuthStateChange triggers reload
   } catch(e){ err.textContent = e.message||'Registration error.'; err.classList.add('show'); $('rg-btn').textContent='Create office account'; }
+}
+
+async function forgotPassword(){
+  const email = ($('li-email').value || '').trim();
+  const err = $('li-err');
+  if(!email){ err.textContent = 'Type your email in the Email box first, then click Forgot your password.'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  try {
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if(error) throw error;
+    showToast('If that email has an account, a reset link is on its way. Check your inbox and spam.');
+  } catch(e){ err.textContent = 'Could not send the reset email: ' + (e.message || e); err.classList.add('show'); }
+}
+function showRecoveryPrompt(){
+  if(document.getElementById('rc-overlay')) return;
+  const ov = document.createElement('div');
+  ov.id = 'rc-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,25,40,.82);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:12px;padding:22px;width:100%;max-width:380px">'
+    + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">Set a new password</div>'
+    + '<div style="font-size:12px;color:#777;margin-bottom:14px">Choose a new password for the Snowy Skips office app.</div>'
+    + '<div class="fld"><label>New password <small style="color:#aaa">(min. 6 characters)</small></label><input type="password" id="rc-new" autocomplete="new-password"></div>'
+    + '<div class="fld"><label>Confirm new password</label><input type="password" id="rc-new2" autocomplete="new-password"></div>'
+    + '<div id="rc-err" style="display:none;color:#b3261e;font-size:12px;margin:4px 0 8px"></div>'
+    + '<button class="btn-p" id="rc-btn" style="width:100%;justify-content:center;padding:10px" onclick="finishRecovery()"><i class="ti ti-key"></i> Save new password</button>'
+    + '</div>';
+  document.body.appendChild(ov);
+}
+async function finishRecovery(){
+  const err = $('rc-err'), btn = $('rc-btn');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  err.style.display = 'none';
+  const p1 = $('rc-new').value, p2 = $('rc-new2').value;
+  if(p1.length < 6) return fail('Password must be at least 6 characters.');
+  if(p1 !== p2) return fail('The two passwords do not match.');
+  btn.disabled = true;
+  try {
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if(error) { btn.disabled = false; return fail(error.message || 'Could not save the password.'); }
+    _recoveryMode = false;
+    try { history.replaceState(null, '', location.pathname); } catch(e){}
+    const ov = document.getElementById('rc-overlay'); if(ov) ov.remove();
+    showToast('New password saved. You are signed in.');
+  } catch(e){ btn.disabled = false; fail(e.message || 'Could not save the password.'); }
 }
 
 async function changePassword(){
@@ -4143,6 +4190,8 @@ sb.auth.onAuthStateChange((event, session) => {
   const now = Date.now();
   if (event === 'SIGNED_IN' && now - _lastAuthEvent < 2000) return;
   _lastAuthEvent = now;
+  if(event === 'PASSWORD_RECOVERY'){ _recoveryMode = true; }
+  if(_recoveryMode && session){ setTimeout(showRecoveryPrompt, 300); }
   if(event === 'SIGNED_OUT'){ currentUser = null; showLogin(); }
   if(event === 'SIGNED_IN'){ init(); }  // re-init instead of full page reload
 });
