@@ -533,6 +533,21 @@ table.t tbody tr:hover{background:#f7f9fc}
             <div class="login-err" id="cp-err" style="display:none;color:#b3261e;font-size:12px;margin:4px 0 8px"></div>
             <button class="btn-p" id="cp-btn" onclick="changePassword()"><i class="ti ti-key"></i> Update password</button>
           </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+            <h3 style="font-size:13px;font-weight:700;color:var(--mc);margin-bottom:6px">Google Calendar</h3>
+            <p style="font-size:11px;color:var(--mt);line-height:1.5;margin-bottom:10px">Shows every bin to deliver (on the order date) and pick up (on the planned pickup date) as all-day entries in Google Calendar. Add this private link once and it keeps itself up to date. Anyone with the link can see the orders, so don't share it.</p>
+            <div class="fld"><label>Calendar link</label><input type="text" id="cal-url" readonly onclick="this.select()" placeholder="Loading…"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+              <button class="btn-p" onclick="copyCalendarLink()"><i class="ti ti-copy"></i> Copy link</button>
+            </div>
+            <div id="cal-msg" style="font-size:11px;color:var(--mt);line-height:1.5"></div>
+            <ol style="font-size:11px;color:var(--mt);line-height:1.6;margin:8px 0 0 16px">
+              <li>Open Google Calendar on a computer (calendar.google.com).</li>
+              <li>On the left, next to "Other calendars", click + and choose <b>From URL</b>.</li>
+              <li>Paste the link, click <b>Add calendar</b>.</li>
+              <li>Click the three dots beside "Snowy Skips bins" &rarr; Settings &rarr; <b>Notifications</b> and add an all-day notification at 7am on the day, so it pings you each morning.</li>
+            </ol>
+          </div>
           <button class="btn-p red" onclick="doSignOut()"><i class="ti ti-logout"></i> Sign out</button>
         </div>
       </div>
@@ -599,6 +614,10 @@ table.t tbody tr:hover{background:#f7f9fc}
     <div class="fld">
       <label>Date</label>
       <input type="date" id="nd-date">
+    </div>
+    <div class="fld">
+      <label>Planned pickup date <span style="font-weight:400;color:var(--mt)">— optional, shows on the calendar</span></label>
+      <input type="date" id="nd-pickup">
     </div>
     <div class="fld">
       <label>Bin type</label>
@@ -1378,6 +1397,7 @@ function showScreen(s){
   if(s==='iso') loadISO();
   if(s==='binmap') renderBinMap();
   if(s==='reviews') renderReviewQR();
+  if(s==='settings') loadCalendarLink();
 }
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
@@ -1428,6 +1448,30 @@ async function doRegister(){
     if(insErr){ err.textContent='Profile save failed: '+insErr.message; err.classList.add('show'); $('rg-btn').textContent='Create office account'; return; }
     // onAuthStateChange triggers reload
   } catch(e){ err.textContent = e.message||'Registration error.'; err.classList.add('show'); $('rg-btn').textContent='Create office account'; }
+}
+
+let _calendarUrl = '';
+async function loadCalendarLink(){
+  const inp = $('cal-url'), msg = $('cal-msg');
+  if(!inp) return;
+  try {
+    const { data, error } = await sb.from('calendar_feed_config').select('token').eq('id', 1).maybeSingle();
+    if(error || !data || !data.token){
+      inp.value = '';
+      inp.placeholder = 'Not set up yet';
+      msg.textContent = 'The calendar is not switched on yet. Run migration_014 in Supabase first (Al has the file).';
+      _calendarUrl = '';
+      return;
+    }
+    _calendarUrl = SUPABASE_URL + '/rest/v1/rpc/calendar_feed?t=' + data.token + '&apikey=' + SUPABASE_ANON_KEY;
+    inp.value = _calendarUrl;
+    msg.textContent = 'Google refreshes subscribed calendars every few hours, so a new order can take a while to appear.';
+  } catch(e){ msg.textContent = 'Could not load the calendar link: ' + (e.message || e); }
+}
+async function copyCalendarLink(){
+  if(!_calendarUrl){ showToast('The calendar link is not available yet.'); return; }
+  try { await navigator.clipboard.writeText(_calendarUrl); showToast('Calendar link copied.'); }
+  catch(e){ $('cal-url').select(); showToast('Press Ctrl+C to copy the selected link.'); }
 }
 
 async function forgotPassword(){
@@ -1864,6 +1908,7 @@ function renderDrawerDetails(d){
           ${ed ? edRow('Delivery window', 'dr-e-window', d.delivery_window) : fieldRow('Delivery window', d.delivery_window)}
         </div>
         ${ed ? edRow('Access and bin placement', 'dr-e-access', d.access_notes, {type:'textarea'}) : (d.access_notes?fieldRow('Access and bin placement', d.access_notes):'')}
+        ${Object.prototype.hasOwnProperty.call(d,'pickup_scheduled') ? '<div class="dr-grid">' + (ed ? dtRow('Planned pickup date', 'dr-e-pickup-sched', d.pickup_scheduled, 'date') : fieldRow('Planned pickup date', fmtDate(d.pickup_scheduled))) + '</div>' : ''}
         <div class="dr-field" style="grid-column:1/-1"><label>Attachments <span style="font-weight:400;color:var(--mt)">(the driver sees these on the job)</span></label>
           ${drAttListHtml(d)}
           <div style="margin-top:8px"><label class="btn-s" style="display:inline-block;cursor:pointer"><i class="ti ti-paperclip"></i> Add PDF or photo<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="drAttAdd('${esc(d.id)}',this)"></label></div>
@@ -2045,7 +2090,7 @@ async function attCommit(key, docketId, by){
   if(u.error) throw u.error;
   return { changed:true, failed: up.failedFiles.length, list };
 }
-function isMissingOrderColumnsError(msg){ return /site_contact|delivery_window|access_notes|attachments/.test(msg || ''); }
+function isMissingOrderColumnsError(msg){ return /site_contact|delivery_window|access_notes|attachments|pickup_scheduled/.test(msg || ''); }
 
 // ── photo markup: draw on a photo (circle the bin spot, mark the wire, etc.) ──
 function attMarkup(file){
@@ -2214,6 +2259,7 @@ async function saveDetailsEdit(docketId){
   if(el('dr-e-request-review')){
     patch.request_review = el('dr-e-request-review').checked;
   }
+  if(el('dr-e-pickup-sched')) patch.pickup_scheduled = el('dr-e-pickup-sched').value || null;
   if(el('dr-e-access')){
     patch.site_contact = txt('dr-e-contact');
     patch.delivery_window = txt('dr-e-window');
@@ -2246,7 +2292,7 @@ async function saveDetailsEdit(docketId){
     }
     if(error && isMissingOrderColumnsError(error.message)){
       showToast('Order info not saved — run migration_013 in Supabase first.');
-      delete patch.site_contact; delete patch.delivery_window; delete patch.access_notes;
+      delete patch.site_contact; delete patch.delivery_window; delete patch.access_notes; delete patch.pickup_scheduled;
       ({ error } = await sb.from('dockets').update(patch).eq('id', docketId));
     }
     if(error) throw error;
@@ -3908,6 +3954,7 @@ function openNewDocket(){
   $('nd-contact').value = '';
   $('nd-window').value = '';
   $('nd-access').value = '';
+  $('nd-pickup').value = '';
   attInit('nd', 'nd-att-list', []);
   $('nd-err').classList.remove('show');
   $('nd-err').textContent = '';
@@ -4052,6 +4099,7 @@ async function saveNewDocket(){
       site_contact: $('nd-contact').value.trim() || null,
       delivery_window: $('nd-window').value || null,
       access_notes: $('nd-access').value.trim() || null,
+      pickup_scheduled: $('nd-pickup').value || null,
       stage: 1,
       is_quote: isQuote,
       quote_items: quoteItems,
@@ -4077,7 +4125,7 @@ async function saveNewDocket(){
     if(insErr && isMissingOrderColumnsError(insErr.message)){
       // migration_013 hasn't been run yet — save the order without the new fields.
       showToast('Order saved without contact, access notes or attachments — run migration_013 in Supabase first.');
-      delete row.site_contact; delete row.delivery_window; delete row.access_notes;
+      delete row.site_contact; delete row.delivery_window; delete row.access_notes; delete row.pickup_scheduled;
       ({ error: insErr } = await sb.from('dockets').insert([row]));
     }
     if(insErr) throw insErr;
